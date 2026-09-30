@@ -11,8 +11,10 @@
 class AShooterCharacter;
 class AShooterGameMode;
 class AShooterWeapon;
+class AShooterWeapon_Knife;
 class AShooterWeapon_Projectile;
 class UShooterPawnSensingComponent;
+struct FShooterLookout;
 struct FShooterRadioEntry;
 
 /**
@@ -38,20 +40,39 @@ struct FShooterRadioEntry;
  *    between MinGrenadeDistance and MaxGrenadeDistance away (or reported by a teammate) gets the HE (else a flashbang,
  *    else the smoke), again by a draw a spot. The aim point is off by up to GrenadeThrowError, the pitch the throw's
  * low arc; a throw that would hit a wall at the bot's nose waits.
- * 3. An enemy in sight: engage (Engage). Turn to it at AimTurnRate, and fire once ReactionTime has passed since it came
- *    into sight: the aim is off by an error that starts at AimError and shrinks with the time on target
- *    (AimErrorDecayTime), drawn again for each burst; automatic weapons fire bursts of BurstShots with BurstPause
- *    between; the AWP zooms first. It moves as CS's bots do: it strafes left and right (StrafeMinTime to StrafeMaxTime
- *    each way, from its stream), crouches with a rifle at CrouchFireDistance or farther, and stands still with the AWP.
- *    An enemy out of sight for EnemyMemory seconds is forgotten (its last place is searched). The weapon's recoil kicks
- *    the aim as it kicks a player's: the bot turns its own aim to the target and the kick rides on top, the bot pulling
+ * 3. An enemy in sight: engage (Engage) with the best weapon that has ammunition (never a grenade: the throws are
+ *    the bot's own). Turn to it at AimTurnRate, and fire once ReactionTime has passed since it came into sight: the aim
+ *    is off by an error that starts at AimError and shrinks with the time on target (AimErrorDecayTime), drawn again
+ *    for each burst; automatic weapons fire bursts of BurstShots with BurstPause between; the AWP zooms first. It moves
+ *    as CS's bots do: it strafes left and right (StrafeMinTime to StrafeMaxTime each way, from its stream), crouches
+ *    with a rifle at CrouchFireDistance or farther, and stands still with the AWP. With the knife it rushes (ps2-polish
+ *    P3): it runs the path to the enemy (a new one as the enemy moves), closes in by the side once within the slash's
+ *    reach, and cuts only within reach: a stab in the back when the enemy turns it, a slash otherwise. An enemy out of
+ *    sight for EnemyMemory seconds is forgotten (its last place is searched). The weapon's recoil kicks the aim as it
+ *    kicks a player's: the bot turns its own aim to the target and the kick rides on top, the bot pulling
  *    RecoilCompensation of each new kick back down.
  * 4. A counter-terrorist and the bomb planted: go to it and defuse (hold the use key).
  * 5. The bomb's carrier: go to the round's site (AShooterGameMode::GetTerroristTargetSite) and plant once inside.
  * 6. A terrorist and the bomb dropped: fetch it.
- * 7. A shot heard (an enemy's), or a teammate's report: go and look where it came from.
- * 8. The objective: the terrorists go to the round's site (and guard the bomb once planted); the counter-terrorists
- *    hold a site each (A for the even ones, B for the odd, by their place in the team), and retake the planted bomb.
+ * 7. A weapon on the floor worth the walk (PickUp): out of ammunition, the nearest dropped weapon with ammunition it
+ *    may take within twice PickupSearchDistance; without a loaded primary, the nearest primary within
+ *    PickupSearchDistance. Its spent weapon is dropped for it (AShooterWeapon::CanBePickedUpBy).
+ * 8. A terrorist without the bomb while the carrier pushes (still SupportDistance or farther from the site): escort
+ *    it, watching to one side of its way.
+ * 9. A shot heard (an enemy's), or a teammate's report: go and look where it came from.
+ * 10. Hunt: outnumbering the enemy by HuntAdvantage, or a terrorist with HuntTimeLeft left and no bomb planted: to the
+ *    enemy's spawn, then from waypoint to waypoint of the map (drawn from the stream) until contact.
+ * 11. The objective (ps2-polish P3, CS's bots with no enemy in sight): the counter-terrorists hold a site each (A for
+ *    the even ones, B for the odd, by their place in the team) and the terrorists take the round's site (its support
+ *    spots once the carrier is there; the planted bomb's site to guard it). Either moves between the site's lookouts
+ *    (AShooterGameMode::GetBombSiteLookouts), LookoutMinTime to LookoutMaxTime at each, turning between the lookout's
+ *    watched directions (the ways in) every WatchMinTime to WatchMaxTime. A counter-terrorist that held its site
+ *    RotateTime with no contact rotates to the next one, and one that hears a teammate's enemy at another site goes
+ *    there with RotateOnReportChance.
+ *
+ * On the move with nobody to aim at, a bot looks along its path (LookTurnRate). Ladders (ps2-polish P3): the waypoint
+ * graph links a ladder's foot and top, and on a ladder the bot faces it and climbs up (the path's point above) or
+ * down (looking down), and jumps off it at the bottom.
  *
  * The radio (ps2-shipping N30e; AShooterGameMode::SendRadioMessage): a bot says "Enemy spotted." with the enemy's
  * place when it sees a new one, "Need backup." once a round when its health falls below NeedBackupHealth, "Sector
@@ -87,6 +108,7 @@ public:
 	static const FName ShouldHuntKey;
 	static const FName IsBlindKey;
 	static const FName IsThrowingKey;
+	static const FName ShouldPickUpKey;
 
 	/** Scales the skill (see the class comment): 0.5 easy, 1 normal, 2 hard. */
 	UPROPERTY(Config)
@@ -105,6 +127,10 @@ public:
 
 	UPROPERTY(Config)
 	float MinAimError = 0.4f;
+
+	/** How far the bot sees an enemy, cm (its senses' SightRadius). */
+	UPROPERTY(Config)
+	float SightRadius = 3500.0f;
 
 	/** How fast the bot turns to its aim, degrees a second. */
 	UPROPERTY(Config)
@@ -147,6 +173,46 @@ public:
 	/** The living players a team needs over the enemy's to hunt them (no bomb planted); 0 never hunts. */
 	UPROPERTY(Config)
 	int32 HuntAdvantage = 2;
+
+	/** The round's seconds left below which a terrorist with no bomb planted hunts; 0 never. */
+	UPROPERTY(Config)
+	float HuntTimeLeft = 30.0f;
+
+	// No enemy in sight (ps2-polish P3)
+
+	/** Seconds at a lookout before the next one of the site, drawn between these. */
+	UPROPERTY(Config)
+	float LookoutMinTime = 3.0f;
+
+	UPROPERTY(Config)
+	float LookoutMaxTime = 7.0f;
+
+	/** Seconds watching one direction of a lookout before turning to the next, drawn between these. */
+	UPROPERTY(Config)
+	float WatchMinTime = 1.0f;
+
+	UPROPERTY(Config)
+	float WatchMaxTime = 2.5f;
+
+	/** How fast the bot turns to look (along its path, a lookout's directions), degrees a second. */
+	UPROPERTY(Config)
+	float LookTurnRate = 240.0f;
+
+	/** How near its site the carrier must be for its escorts to take the site's support spots, cm. */
+	UPROPERTY(Config)
+	float SupportDistance = 1500.0f;
+
+	/** A teammate's enemy this near a site is at that site (a counter-terrorist may rotate there), cm. */
+	UPROPERTY(Config)
+	float SiteReportRadius = 1500.0f;
+
+	/** The chance a counter-terrorist holding a site rotates to another site where a teammate saw an enemy. */
+	UPROPERTY(Config)
+	float RotateOnReportChance = 1.0f;
+
+	/** How far a bot without a loaded primary goes for one on the floor, cm (out of ammunition: twice, any weapon). */
+	UPROPERTY(Config)
+	float PickupSearchDistance = 1500.0f;
 
 	// Combat movement (ps2-shipping N30e)
 
@@ -233,8 +299,8 @@ public:
 	/** The enemy engaged, or null. */
 	[[nodiscard]] AShooterCharacter* GetEnemy() const;
 	/**
-	 * The name of the tree's branch that ran last (Idle, Blind, Engage, ThrowGrenade, Defuse, Plant, FetchBomb, Escort,
-	 * Investigate, Hunt, Objective).
+	 * The name of the tree's branch that ran last (Idle, Blind, Engage, ThrowGrenade, Defuse, Plant, FetchBomb, PickUp,
+	 * Escort, Investigate, Hunt, Objective).
 	 */
 	[[nodiscard]] FName GetCurrentTask() const
 	{
@@ -314,6 +380,24 @@ public:
 		return bStrafingThisTick ? StrafeDirection : 0.0f;
 	}
 
+	// No enemy in sight
+
+	/** The weapon on the floor the bot goes for (the PickUp branch), or null. */
+	[[nodiscard]] AShooterWeapon* GetPickupTarget() const
+	{
+		return PickupTarget.Get();
+	}
+	/** The lookouts visited this round (arrivals, the first included). */
+	[[nodiscard]] int32 GetNumLookoutsVisited() const
+	{
+		return NumLookoutsVisited;
+	}
+	/** The site whose lookouts the bot keeps (NAME_None before the objective's first tick). */
+	[[nodiscard]] FName GetLookoutSite() const
+	{
+		return LookoutSite;
+	}
+
 	// The radio
 
 	/** A teammate's radio message (AShooterGameMode::SendRadioMessage): a spotted enemy near it is a place to look. */
@@ -327,7 +411,7 @@ public:
 	void Tick(float DeltaSeconds) override;
 
 protected:
-	/** Seeds the bot's stream once and starts over; the pawn walks through ladders (it does not climb them). */
+	/** Seeds the bot's stream once and starts over. */
 	void OnPossess(APawn* InPawn) override;
 	void OnUnPossess() override;
 
@@ -347,6 +431,7 @@ private:
 	EBTNodeResult TaskDefuse();
 	EBTNodeResult TaskPlant();
 	EBTNodeResult TaskFetchBomb();
+	EBTNodeResult TaskPickUp();
 	EBTNodeResult TaskEscort(float DeltaTime);
 	EBTNodeResult TaskInvestigate();
 	EBTNodeResult TaskHunt(float DeltaTime);
@@ -356,8 +441,21 @@ private:
 	void MoveToGoal(const FVector& Goal);
 	/** Stands still: no path, no wish. */
 	void StandStill();
-	/** Stands still at a goal, looking around slowly. */
-	void HoldAndLookAround(float DeltaTime);
+	/** The reaction time (with the difficulty) has passed since the enemy came into sight: the bot may fire. */
+	[[nodiscard]] bool HasReacted() const;
+	/** The knife's fight (Engage with the knife drawn; see the class comment). */
+	EBTNodeResult EngageWithKnife(AShooterWeapon_Knife& Knife, float DeltaTime);
+	/** Chooses the weapon on the floor to go for, a few times a second (the PickUp branch's). */
+	void UpdatePickupTarget();
+	/** Turns the view toward Wanted at Rate degrees a second (no weapon's kick: looking, not aiming). */
+	void LookToward(const FRotator& Wanted, float Rate, float DeltaTime);
+	/**
+	 * Stands still and watches Yaws (a lookout's): the first (the main way in) for twice a drawn time between each of
+	 * the others in turn (from a drawn one), each a drawn time; again from the first when Yaws change.
+	 */
+	void Watch(const TArray<float, TInlineAllocator<4>>& Yaws, float DeltaTime);
+	/** On a ladder: faces it and climbs toward the path's point, or jumps off it at the bottom. */
+	void UpdateLadderClimb(AShooterCharacter& Self);
 	/** The trigger up. */
 	void ReleaseTrigger();
 	/**
@@ -469,4 +567,36 @@ private:
 	/** The CT's rotation: sites moved on this round, and since when it holds its site (-1: not there). */
 	int32 SiteRotation = 0;
 	float HoldingSinceTime = -1.0f;
+
+	/**
+	 * The lookouts: the site whose lookouts the bot keeps, the one it goes to or stands at, when it leaves it (-1: not
+	 * there yet), and how many it reached this round.
+	 */
+	FName LookoutSite;
+	int32 LookoutIndex = 0;
+	float LookoutLeaveTime = -1.0f;
+	int32 NumLookoutsVisited = 0;
+
+	/** The watch (Watch): the directions, the one watched, the last of the others watched, when it turns. */
+	TArray<float, TInlineAllocator<4>> WatchYaws;
+	int32 WatchIndex = 0;
+	int32 WatchOther = 0;
+	float NextWatchTime = 0.0f;
+	/** The bot turned its view this tick (a task looked or aimed): the path does not turn it. */
+	bool bLookedThisTick = false;
+	/** The knife's rush this tick: its moves are run, not walked. */
+	bool bRushingThisTick = false;
+	/** The walk key is held for the strafe. */
+	bool bWalkingForStrafe = false;
+
+	/** The hunt's next waypoint (a draw of the graph's) once at the enemy's spawn. */
+	FVector HuntGoal = FVector::ZeroVector;
+	bool bHasHuntGoal = false;
+
+	/** The weapon on the floor it goes for, when it chose it, and the next choice. */
+	TWeakObjectPtr<AShooterWeapon> PickupTarget;
+	float PickupChosenTime = 0.0f;
+	float NextPickupCheckTime = 0.0f;
+	/** A weapon it went for and could not take this round (another took the spot, the walk failed). */
+	TWeakObjectPtr<AShooterWeapon> GivenUpPickup;
 };

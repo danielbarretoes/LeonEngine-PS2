@@ -29,6 +29,9 @@ namespace
 	/** How many of the nearest nodes FindNearestNode tries to walk to before settling for the nearest. */
 	constexpr int32 MaxWalkCandidates = 8;
 
+	/** A ladder's foot and top (ANavigationWaypoint::Flags): linked across the climb (AutoLinkWaypoints). */
+	const FName LadderFlag(TEXT("Ladder"));
+
 	/** The indices of Nodes sorted by the distance of their location to Point (ties by index). */
 	TArray<int32> SortByDistance(const TArray<UNavigationSystem::FNode>& Nodes, const FVector& Point)
 	{
@@ -407,6 +410,14 @@ int32 UNavigationSystem::AutoLinkWaypoints(UWorld& World, const FWaypointLinkPar
 			{
 				continue;
 			}
+			// A ladder's foot and its top: the climb is no walk, and it goes both ways.
+			if (From->HasFlag(LadderFlag) && To->HasFlag(LadderFlag) &&
+				FVector::Dist2D(From->GetActorLocation(), To->GetActorLocation()) <= InParams.MaxLadderLinkDistance)
+			{
+				From->Links.Add(To);
+				++Added;
+				continue;
+			}
 			if (!CanWalkBetween(Scene, From->GetActorLocation(), To->GetActorLocation(), InParams))
 			{
 				continue;
@@ -414,8 +425,8 @@ int32 UNavigationSystem::AutoLinkWaypoints(UWorld& World, const FWaypointLinkPar
 			// A walk or a jump must also be walkable back (a capsule that starts against a wall sees it, one that
 			// ends against it may not: the link would be one way by accident); only a drop too high to climb back
 			// stays one way.
-			FVector FloorFrom;
-			FVector FloorTo;
+			FVector FloorFrom = FVector::ZeroVector;
+			FVector FloorTo = FVector::ZeroVector;
 			const bool bFloors = FindFloorBelow(Scene, From->GetActorLocation(), InParams, FloorFrom) &&
 				FindFloorBelow(Scene, To->GetActorLocation(), InParams, FloorTo);
 			const bool bDropOnly = bFloors && FloorFrom.Z - FloorTo.Z > InParams.MaxJumpHeight;

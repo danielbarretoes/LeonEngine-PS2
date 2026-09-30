@@ -198,7 +198,6 @@ bool FShooterSurfacesLadderStepsTest::RunTest(const FString& Parameters)
 	TickSteps(World, 1);
 	AShooterCharacter* Climber = SpawnShooter(World, FVector(-100.0f, 0.0f, 0.0f), 0.0f, EShooterTeam::CT);
 	UShooterCharacterMovement& Move = *Climber->GetShooterCharacterMovement();
-	Move.bCanClimbLadders = true;
 	TestEqual("CS's 0.35 s", Climber->LadderStepInterval, 0.35f);
 	for (int32 Index = 0; Index < 60 && !Move.IsOnLadder(); ++Index)
 	{

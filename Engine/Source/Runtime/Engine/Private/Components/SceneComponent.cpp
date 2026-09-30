@@ -285,7 +285,10 @@ void USceneComponent::DetachAllChildren()
 	while (AttachChildren.Num() > 0)
 	{
 		USceneComponent* Child = AttachChildren.Last();
-		if (Child == nullptr)
+		// A child whose parent is not this one any more (the collector cleared its pointer to a component being
+		// destroyed, or SetupAttachment moved it) only leaves the list: detaching it would not, and the loop would
+		// never end (ps2-polish P3: a bot match hung in the exit's collection).
+		if (Child == nullptr || Child->GetAttachParent() != this)
 		{
 			AttachChildren.Pop(false);
 			continue;

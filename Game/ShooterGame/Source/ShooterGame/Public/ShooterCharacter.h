@@ -388,9 +388,10 @@ public:
 	[[nodiscard]] AShooterWeapon* FindWeaponOfClass(const UClass* WeaponClass) const;
 	/**
 	 * Draws the best weapon with ammunition (AShooterWeapon::HasAmmo; one that can reload counts): primary, secondary,
-	 * grenade. When none has any, the weapon in hand stays (or, with none in hand, the first by that order).
+	 * grenade (unless bWithGrenades is false: a bot in a fight, whose throws are its own), knife. When none has any,
+	 * the weapon in hand stays (or, with none in hand, the first by that order).
 	 */
-	void EquipBestWeapon();
+	void EquipBestWeapon(bool bWithGrenades = true);
 	/** Drops a weapon of the inventory at the pawn's feet, ahead; returns true when dropped. */
 	bool DropWeapon(AShooterWeapon* Weapon);
 	/**

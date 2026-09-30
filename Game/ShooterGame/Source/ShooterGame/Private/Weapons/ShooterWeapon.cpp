@@ -10,6 +10,7 @@
 #include "GameFramework/Controller.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/PackageName.h"
+#include "ShooterAIController.h"
 #include "ShooterCharacter.h"
 #include "ShooterGame.h"
 #include "ShooterGameMode.h"
@@ -241,6 +242,18 @@ void AShooterWeapon::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+bool AShooterWeapon::CanBePickedUpBy(const AShooterCharacter& Pawn) const
+{
+	const AShooterWeapon* Held = Pawn.GetWeaponInSlot(Slot);
+	if (Held == nullptr)
+	{
+		return true;
+	}
+	// A bot swaps a spent weapon for one with ammunition (AddWeapon drops the spent one: CS's bots drop it and walk
+	// over the other); a player's slot must be free (CS's walk-over).
+	return !Held->HasAmmo() && HasAmmo() && Cast<AShooterAIController>(Pawn.GetController()) != nullptr;
+}
+
 void AShooterWeapon::TickPickup()
 {
 	const AShooterGameMode* GameMode = GetShooterGameMode(GetWorld());
@@ -253,7 +266,7 @@ void AShooterWeapon::TickPickup()
 	// The game mode's pawns, in the level's order (AddWeapon changes no registry).
 	for (AShooterCharacter* Pawn : GameMode->GetPawns())
 	{
-		if (Pawn->IsPendingKillPending() || !Pawn->IsAlive() || Pawn->GetWeaponInSlot(Slot) != nullptr)
+		if (Pawn->IsPendingKillPending() || !Pawn->IsAlive() || !CanBePickedUpBy(*Pawn))
 		{
 			continue;
 		}

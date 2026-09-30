@@ -1,6 +1,8 @@
 #include "ShooterAIController.h"
 
+#include "AI/Navigation/NavigationSystem.h"
 #include "Camera/CameraComponent.h"
+#include "Engine/TriggerVolume.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/Crc.h"
@@ -16,6 +18,7 @@
 #include "Weapons/ShooterWeapon.h"
 #include "Weapons/ShooterWeapon_AWP.h"
 #include "Weapons/ShooterWeapon_Instant.h"
+#include "Weapons/ShooterWeapon_Knife.h"
 #include "Weapons/ShooterWeapon_Projectile.h"
 
 DECLARE_CYCLE_STAT(TEXT("Bot Tick"), STAT_ShooterBotTick, STATGROUP_Game);
@@ -42,8 +45,7 @@ namespace
 	/** Seconds a heard shot is investigated. */
 	constexpr float NoiseMemory = 6.0f;
 
-	/** The sensing: CS bots see about 140 degrees and 60 m, and hear shots through the map. */
-	constexpr float BotSightRadius = 6000.0f;
+	/** The sensing: CS bots see about 140 degrees (the distance is SightRadius), and hear shots through the map. */
 	constexpr float BotVisionHalfAngle = 70.0f;
 	constexpr float BotHearingThreshold = 2500.0f;
 	constexpr float BotLOSHearingThreshold = 5000.0f;
@@ -64,6 +66,41 @@ namespace
 	/** The blind fire's pitch stays within this, degrees. */
 	constexpr float BlindFireMaxPitch = 45.0f;
 
+	/**
+	 * The knife (ps2-polish P3): a cut goes this much short of its reach to the enemy's capsule, cm; the aim it needs,
+	 * degrees; nearer than this part of the stab's reach the bot circles, farther it closes in as it circles.
+	 */
+	constexpr float KnifeReachMargin = 10.0f;
+	constexpr float KnifeAimTolerance = 8.0f;
+	constexpr float KnifeCloseFraction = 0.6f;
+
+	/**
+	 * The weapons on the floor: how often the one to go for is chosen again, s; how far above or below the feet one is
+	 * looked for, cm; how long a walk to one lasts before it is given up, s.
+	 */
+	constexpr float PickupCheckInterval = 0.5f;
+	constexpr float PickupMaxHeight = 150.0f;
+	constexpr float PickupGiveUpTime = 12.0f;
+
+	/** A lookout is reached within GoalReachedDistance across and this up or down (a roof's is not the floor's), cm. */
+	constexpr float LookoutReachHeight = 120.0f;
+
+	/** This near its lookout a bot walking to it already watches the lookout's main way in, cm. */
+	constexpr float LookoutApproachDistance = 1000.0f;
+
+	/** An escort watches this far to one side of the carrier's way, degrees. */
+	constexpr float EscortWatchAngle = 50.0f;
+
+	/** The path's point this near does not turn the view (the bot is on it), cm. */
+	constexpr float LookAheadMinDistance = 30.0f;
+
+	/**
+	 * On a ladder: the path's point this near the ladder's top is climbed to, this far below the feet climbed down to
+	 * (cm), looking down this much (degrees); a point in between is left for (the bottom).
+	 */
+	constexpr float LadderEndTolerance = 40.0f;
+	constexpr float LadderDownPitch = -85.0f;
+
 	/** The tree's branches (GetCurrentTask), named once. */
 	const FName IdleTaskName(TEXT("Idle"));
 	const FName BlindTaskName(TEXT("Blind"));
@@ -72,6 +109,7 @@ namespace
 	const FName DefuseTaskName(TEXT("Defuse"));
 	const FName PlantTaskName(TEXT("Plant"));
 	const FName FetchBombTaskName(TEXT("FetchBomb"));
+	const FName PickUpTaskName(TEXT("PickUp"));
 	const FName EscortTaskName(TEXT("Escort"));
 	const FName InvestigateTaskName(TEXT("Investigate"));
 	const FName HuntTaskName(TEXT("Hunt"));
@@ -90,6 +128,7 @@ const FName AShooterAIController::ShouldEscortKey(TEXT("ShouldEscort"));
 const FName AShooterAIController::ShouldHuntKey(TEXT("ShouldHunt"));
 const FName AShooterAIController::IsBlindKey(TEXT("IsBlind"));
 const FName AShooterAIController::IsThrowingKey(TEXT("IsThrowing"));
+const FName AShooterAIController::ShouldPickUpKey(TEXT("ShouldPickUp"));
 
 AShooterAIController::AShooterAIController(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -100,7 +139,6 @@ AShooterAIController::AShooterAIController(const FObjectInitializer& ObjectIniti
 	PrimaryActorTick.bCanEverTick = true;
 	PawnSensing = CreateDefaultSubobject<UShooterPawnSensingComponent>(TEXT("PawnSensing"));
 	PawnSensing->bOnlySensePlayers = false;
-	PawnSensing->SightRadius = BotSightRadius;
 	PawnSensing->SetPeripheralVisionAngle(BotVisionHalfAngle);
 	PawnSensing->SensingInterval = SensingInterval;
 	PawnSensing->HearingThreshold = BotHearingThreshold;
@@ -138,6 +176,8 @@ void AShooterAIController::BuildTree()
 		Sequence({Decorator(CarriesBombKey), Action([this](UBlackboardComponent&, float) { return TaskPlant(); })});
 	UBTNode* Fetch =
 		Sequence({Decorator(BombDroppedKey), Action([this](UBlackboardComponent&, float) { return TaskFetchBomb(); })});
+	UBTNode* PickUp =
+		Sequence({Decorator(ShouldPickUpKey), Action([this](UBlackboardComponent&, float) { return TaskPickUp(); })});
 	UBTNode* Escort = Sequence({Decorator(ShouldEscortKey),
 		Action([this](UBlackboardComponent&, float DeltaTime) { return TaskEscort(DeltaTime); })});
 	UBTNode* Investigate = Sequence(
@@ -145,14 +185,16 @@ void AShooterAIController::BuildTree()
 	UBTNode* Hunt = Sequence({Decorator(ShouldHuntKey),
 		Action([this](UBlackboardComponent&, float DeltaTime) { return TaskHunt(DeltaTime); })});
 	UBTNode* Objective = Action([this](UBlackboardComponent&, float DeltaTime) { return TaskObjective(DeltaTime); });
-	TreeNodes.Add(MakeUnique<UBTComposite_Selector>(
-		TArray<UBTNode*>{Idle, Blind, Throw, Engage, Defuse, Plant, Fetch, Escort, Investigate, Hunt, Objective}));
+	TreeNodes.Add(MakeUnique<UBTComposite_Selector>(TArray<UBTNode*>{
+		Idle, Blind, Throw, Engage, Defuse, Plant, Fetch, PickUp, Escort, Investigate, Hunt, Objective}));
 	Tree.SetRoot(TreeNodes.Last().Get());
 }
 
 void AShooterAIController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+	// The sight's reach is config (the constructor runs before the config is read).
+	PawnSensing->SightRadius = SightRadius;
 	if (!bRandomSeeded)
 	{
 		// The bot's stream: the match's seed and the bot's index (the same bots replay the same choices, whatever their
@@ -175,13 +217,13 @@ void AShooterAIController::OnPossess(APawn* InPawn)
 	bStrafingThisTick = false;
 	bStrafedLastTick = false;
 	bCombatCrouch = false;
+	bWalkingForStrafe = false;
+	LookoutSite = NAME_None;
+	LookoutLeaveTime = -1.0f;
+	WatchYaws.Reset();
+	bHasHuntGoal = false;
+	PickupTarget.Reset();
 	EndThrow();
-	// The bots do not climb ladders yet: they walk through a ladder's volume (ps2-shipping N30c).
-	const AShooterCharacter* Shooter = Cast<AShooterCharacter>(InPawn);
-	if (UShooterCharacterMovement* Move = Shooter != nullptr ? Shooter->GetShooterCharacterMovement() : nullptr)
-	{
-		Move->bCanClimbLadders = false;
-	}
 }
 
 void AShooterAIController::OnUnPossess()
@@ -193,6 +235,7 @@ void AShooterAIController::OnUnPossess()
 	{
 		Self->SetWalking(false);
 	}
+	bWalkingForStrafe = false;
 	Enemy = nullptr;
 	Super::OnUnPossess();
 }
@@ -251,6 +294,11 @@ int32 AShooterAIController::GetTeamIndex() const
 float AShooterAIController::GetRecoilCompensation() const
 {
 	return FMath::Clamp(RecoilCompensation * FMath::Max(0.1f, Difficulty), 0.0f, 1.0f);
+}
+
+bool AShooterAIController::HasReacted() const
+{
+	return GetWorldTime() - EnemyFirstSeenTime >= ReactionTime / FMath::Max(0.1f, Difficulty);
 }
 
 float AShooterAIController::GetCurrentAimError() const
@@ -347,6 +395,14 @@ void AShooterAIController::UpdateBlackboard()
 		bAskedForBackup = false;
 		StrafeDirection = 0.0f;
 		NextBlindAimTime = 0.0f;
+		LookoutSite = NAME_None;
+		LookoutLeaveTime = -1.0f;
+		NumLookoutsVisited = 0;
+		WatchYaws.Reset();
+		bHasHuntGoal = false;
+		PickupTarget.Reset();
+		GivenUpPickup.Reset();
+		NextPickupCheckTime = 0.0f;
 	}
 
 	// The enemy: alive and seen within EnemyMemory (its last place is searched afterwards).
@@ -373,19 +429,33 @@ void AShooterAIController::UpdateBlackboard()
 	Board.SetValueAsBool(BombDroppedKey, Team == EShooterTeam::T && BombState == EShooterBombState::Dropped);
 	Board.SetValueAsBool(HeardEnemyKey, NoiseHeardTime >= 0.0f && Now - NoiseHeardTime <= NoiseMemory);
 
-	// Escort: a terrorist without the bomb stays with the teammate carrying it.
+	// Escort: a terrorist without the bomb stays with the teammate carrying it while it pushes; once the carrier nears
+	// the site, the others take the site's support spots (the objective's lookouts).
 	const AShooterBomb* Bomb = GameMode != nullptr ? GameMode->GetBomb() : nullptr;
 	const AShooterCharacter* Carrier = Bomb != nullptr ? Bomb->GetCarrier() : nullptr;
+	FVector TargetSite = FVector::ZeroVector;
+	const bool bCarrierPushing = Carrier != nullptr &&
+		(!GameMode->GetBombSiteLocation(GameMode->GetTerroristTargetSite(), TargetSite) ||
+			FVector::DistSquared2D(Carrier->GetActorLocation(), TargetSite) > FMath::Square(SupportDistance));
 	Board.SetValueAsBool(ShouldEscortKey,
 		Team == EShooterTeam::T && Carrier != nullptr && Carrier != Self && Carrier->IsAlive() &&
-			BombState == EShooterBombState::Carried);
-	// Hunt: outnumbering the enemy (by HuntAdvantage) with no bomb to go for, the bot goes after them (the game mode
-	// counts the living once a frame for every bot).
+			BombState == EShooterBombState::Carried && bCarrierPushing);
+	// Hunt: outnumbering the enemy (by HuntAdvantage) with no bomb to go for, or a terrorist short of time
+	// (HuntTimeLeft) with no bomb planted, the bot goes after them (the game mode counts the living once a frame for
+	// every bot).
 	const EShooterTeam EnemyTeam = Team == EShooterTeam::CT ? EShooterTeam::T : EShooterTeam::CT;
 	const int32 EnemiesAlive = GameMode != nullptr ? GameMode->CountAlive(EnemyTeam) : 0;
+	const bool bOutnumbering =
+		HuntAdvantage > 0 && GameMode != nullptr && GameMode->CountAlive(Team) >= EnemiesAlive + HuntAdvantage;
+	const bool bShortOfTime = Team == EShooterTeam::T && HuntTimeLeft > 0.0f && State != nullptr &&
+		State->GetRoundState() == EShooterRoundState::Live && State->GetPhaseTimeRemaining(Now) <= HuntTimeLeft;
 	Board.SetValueAsBool(ShouldHuntKey,
-		HuntAdvantage > 0 && Team != EShooterTeam::None && EnemiesAlive > 0 &&
-			BombState != EShooterBombState::Planted && GameMode->CountAlive(Team) >= EnemiesAlive + HuntAdvantage);
+		Team != EShooterTeam::None && EnemiesAlive > 0 && BombState != EShooterBombState::Planted &&
+			(bOutnumbering || bShortOfTime));
+
+	// A weapon on the floor worth the walk (chosen a few times a second).
+	UpdatePickupTarget();
+	Board.SetValueAsBool(ShouldPickUpKey, PickupTarget.IsValid());
 
 	// A grenade: with nobody in sight, a throw may start. A throw under way is finished before the fight (CS's bots
 	// throw anyway); turned away from its flashbang, the bot fights an enemy that shows up.
@@ -431,7 +501,7 @@ EBTNodeResult AShooterAIController::TaskBlind(float DeltaTime)
 	}
 	StandStill();
 	// CS's blinded bots fire at random: around where the enemy was last seen, else around the view.
-	Self->EquipBestWeapon();
+	Self->EquipBestWeapon(false);
 	AShooterWeapon* Weapon = Self->GetWeapon();
 	if (Weapon == nullptr ||
 		(Weapon->Slot != EShooterWeaponSlot::Primary && Weapon->Slot != EShooterWeaponSlot::Secondary))
@@ -574,7 +644,7 @@ TArray<FString> AShooterAIController::BuyForRound()
 			TryBuy(*Item);
 		}
 	}
-	Self->EquipBestWeapon();
+	Self->EquipBestWeapon(false);
 	return Bought;
 }
 
@@ -591,14 +661,24 @@ EBTNodeResult AShooterAIController::TaskEngage(float DeltaTime)
 	{
 		EndThrow();
 	}
-	StandStill();
 	Self->StopUse();
-	Self->EquipBestWeapon();
+	// The best weapon with ammunition, never a grenade (the throws are the ThrowGrenade branch's).
+	Self->EquipBestWeapon(false);
 	AShooterWeapon* Weapon = Self->GetWeapon();
 	if (Weapon == nullptr)
 	{
 		return EBTNodeResult::Failed;
 	}
+	// Hurt badly: the team hears it once a round (CS's "Need backup."), as soon as the radio lets it.
+	if (!bAskedForBackup && Self->GetHealth() < NeedBackupHealth)
+	{
+		bAskedForBackup = SayOnRadio(EShooterRadioMessage::NeedBackup);
+	}
+	if (AShooterWeapon_Knife* Knife = Cast<AShooterWeapon_Knife>(Weapon))
+	{
+		return EngageWithKnife(*Knife, DeltaTime);
+	}
+	StandStill();
 
 	const FVector EnemyFeet = Enemy->GetActorLocation();
 	const FVector AimPoint =
@@ -637,15 +717,8 @@ EBTNodeResult AShooterAIController::TaskEngage(float DeltaTime)
 		}
 	}
 
-	// Hurt badly: the team hears it once a round (CS's "Need backup."), as soon as the radio lets it.
-	if (!bAskedForBackup && Self->GetHealth() < NeedBackupHealth)
-	{
-		bAskedForBackup = SayOnRadio(EShooterRadioMessage::NeedBackup);
-	}
-
 	const float Now = GetWorldTime();
-	const float Skill = FMath::Max(0.1f, Difficulty);
-	const bool bReacted = Now - EnemyFirstSeenTime >= ReactionTime / Skill;
+	const bool bReacted = HasReacted();
 	const bool bOnTarget = AngleLeft <= FireTolerance;
 	if (!bReacted || !bOnTarget || Now < BurstPauseEndTime)
 	{
@@ -683,6 +756,70 @@ EBTNodeResult AShooterAIController::TaskEngage(float DeltaTime)
 			const float Error = GetCurrentAimError();
 			AimOffset = FRotator(BotRandom.FRandRange(-Error, Error), BotRandom.FRandRange(-Error, Error), 0.0f);
 		}
+	}
+	return EBTNodeResult::Running;
+}
+
+EBTNodeResult AShooterAIController::EngageWithKnife(AShooterWeapon_Knife& Knife, float DeltaTime)
+{
+	AShooterCharacter* Self = GetShooterPawn();
+	EndCombatCrouch();
+	const FVector EnemyFeet = Enemy->GetActorLocation();
+	const FVector Feet = Self->GetActorLocation();
+	// The cut's reach ends on the enemy's capsule (its line starts at the eyes, above the feet).
+	const float Reach = FMath::Max(0.0f, FVector::Dist2D(EnemyFeet, Feet) - Enemy->GetCapsule().GetCapsuleRadius());
+	const bool bInSlashReach = Reach <= Knife.SlashRange - KnifeReachMargin;
+	const bool bInStabReach = Reach <= Knife.StabRange - KnifeReachMargin;
+	const bool bBackTurned = AShooterWeapon_Knife::IsBackstab(Feet, *Enemy);
+	// CS's bots rush with the knife: the path to the enemy (MoveToGoal finds a new one as it moves on), then, within
+	// the slash's reach, straight in behind an enemy whose back is turned (for the stab), else around it by the side,
+	// closing in to the stab's reach; run, not walked.
+	bRushingThisTick = true;
+	const FVector ToEnemy = (EnemyFeet - Feet).GetSafeNormal2D();
+	if (!bInSlashReach)
+	{
+		MoveToGoal(EnemyFeet);
+	}
+	else if (bBackTurned)
+	{
+		StandStill();
+		StrafeWish = ToEnemy;
+		bStrafingThisTick = Reach > Knife.StabRange * KnifeCloseFraction;
+	}
+	else
+	{
+		StandStill();
+		UpdateStrafe(EnemyFeet);
+		if (Reach > Knife.StabRange * KnifeCloseFraction)
+		{
+			StrafeWish = (StrafeWish + ToEnemy).GetSafeNormal2D();
+		}
+	}
+
+	const FVector AimPoint =
+		EnemyFeet + FVector(0.0f, 0.0f, Enemy->bIsCrouched ? AimHeightCrouched : AimHeightStanding);
+	const FVector Eyes = Self->GetFirstPersonCameraComponent()->GetComponentLocation();
+	const float AngleLeft = AimToward((AimPoint - Eyes).Rotation(), Knife, DeltaTime);
+	const bool bReacted = HasReacted();
+	if (!bReacted || !bInSlashReach || AngleLeft > KnifeAimTolerance)
+	{
+		ReleaseTrigger();
+		return EBTNodeResult::Running;
+	}
+	// Its back turned: the stab (three times as hard) once within its reach, no slash before; else slashes while the
+	// trigger is held.
+	if (bBackTurned)
+	{
+		ReleaseTrigger();
+		if (bInStabReach)
+		{
+			Self->StartSecondaryFire();
+		}
+	}
+	else if (!bTriggerHeld)
+	{
+		Self->StartWeaponFire();
+		bTriggerHeld = true;
 	}
 	return EBTNodeResult::Running;
 }
@@ -879,7 +1016,7 @@ EBTNodeResult AShooterAIController::TaskThrowGrenade(float DeltaTime)
 		if (Grenade == nullptr || !Self->GetInventory().Contains(Grenade) || Now - ThrowStartTime > ThrowTimeout)
 		{
 			EndThrow();
-			Self->EquipBestWeapon();
+			Self->EquipBestWeapon(false);
 			return EBTNodeResult::Failed;
 		}
 		// Draw it, turn to the throw, and throw once it is out and aimed.
@@ -905,7 +1042,7 @@ EBTNodeResult AShooterAIController::TaskThrowGrenade(float DeltaTime)
 		}
 		bThrown = true;
 		NextGrenadeTime = Now + GrenadeCooldown;
-		Self->EquipBestWeapon();
+		Self->EquipBestWeapon(false);
 		if (!bFlashbang)
 		{
 			EndThrow();
@@ -1002,6 +1139,27 @@ EBTNodeResult AShooterAIController::TaskFetchBomb()
 	return EBTNodeResult::Running;
 }
 
+EBTNodeResult AShooterAIController::TaskPickUp()
+{
+	const AShooterCharacter* Self = GetShooterPawn();
+	const AShooterWeapon* Weapon = PickupTarget.Get();
+	if (Self == nullptr || Weapon == nullptr || !Weapon->IsDropped())
+	{
+		return EBTNodeResult::Failed;
+	}
+	CurrentTask = PickUpTaskName;
+	ReleaseTrigger();
+	// Over it: its pickup gives it to the bot (once its PickupDelay is over), the spent one dropped for it.
+	if (FVector::DistSquared2D(Self->GetActorLocation(), Weapon->GetActorLocation()) <=
+		FMath::Square(Weapon->PickupRadius * 0.5f))
+	{
+		StandStill();
+		return EBTNodeResult::Running;
+	}
+	MoveToGoal(Weapon->GetActorLocation());
+	return EBTNodeResult::Running;
+}
+
 EBTNodeResult AShooterAIController::TaskEscort(float DeltaTime)
 {
 	const AShooterGameMode* GameMode = GetShooterGameMode();
@@ -1016,7 +1174,11 @@ EBTNodeResult AShooterAIController::TaskEscort(float DeltaTime)
 	ReleaseTrigger();
 	if (FVector::DistSquared2D(Self->GetActorLocation(), Carrier->GetActorLocation()) <= FMath::Square(EscortDistance))
 	{
-		HoldAndLookAround(DeltaTime);
+		// Beside the carrier, watching one side of its way (the even bots its right, the odd its left).
+		StandStill();
+		const float Side = BotIndex % 2 == 0 ? 1.0f : -1.0f;
+		LookToward(
+			FRotator(0.0f, Carrier->GetActorRotation().Yaw + (Side * EscortWatchAngle), 0.0f), LookTurnRate, DeltaTime);
 		return EBTNodeResult::Running;
 	}
 	MoveToGoal(Carrier->GetActorLocation());
@@ -1050,20 +1212,31 @@ EBTNodeResult AShooterAIController::TaskHunt(float DeltaTime)
 {
 	const AShooterCharacter* Self = GetShooterPawn();
 	const AShooterGameMode* GameMode = GetShooterGameMode();
-	FVector Goal = FVector::ZeroVector;
+	const UWorld* World = GetWorld();
+	FVector Goal = HuntGoal;
 	const EShooterTeam EnemyTeam =
 		Self != nullptr && Self->GetTeam() == EShooterTeam::CT ? EShooterTeam::T : EShooterTeam::CT;
-	if (Self == nullptr || GameMode == nullptr || !GameMode->GetTeamSpawnLocation(EnemyTeam, Goal))
+	if (Self == nullptr || GameMode == nullptr || World == nullptr ||
+		(!bHasHuntGoal && !GameMode->GetTeamSpawnLocation(EnemyTeam, Goal)))
 	{
 		return EBTNodeResult::Failed;
 	}
 	CurrentTask = HuntTaskName;
 	ReleaseTrigger();
-	// Toward the enemy's spawn: the senses turn the first contact into an engagement or an investigation.
+	// Toward the enemy's spawn, then from waypoint to waypoint (CS's bots roam the map as they hunt): the senses turn
+	// the first contact into an engagement or an investigation.
 	if (FVector::DistSquared2D(Self->GetActorLocation(), Goal) <= FMath::Square(GoalReachedDistance))
 	{
-		HoldAndLookAround(DeltaTime);
-		return EBTNodeResult::Succeeded;
+		const TArray<UNavigationSystem::FNode>& Nodes = World->GetNavigationSystem().GetNodes();
+		if (Nodes.Num() == 0)
+		{
+			StandStill();
+			LookToward(FRotator(0.0f, GetControlRotation().Yaw + 90.0f, 0.0f), LookTurnRate * 0.25f, DeltaTime);
+			return EBTNodeResult::Succeeded;
+		}
+		HuntGoal = Nodes[BotRandom.RandHelper(Nodes.Num())].Location;
+		bHasHuntGoal = true;
+		Goal = HuntGoal;
 	}
 	MoveToGoal(Goal);
 	return EBTNodeResult::Running;
@@ -1080,46 +1253,79 @@ EBTNodeResult AShooterAIController::TaskObjective(float DeltaTime)
 	}
 	CurrentTask = ObjectiveTaskName;
 	ReleaseTrigger();
-	FVector Goal = Self->GetActorLocation();
+	// The site: the planted bomb's (the terrorists guard it; a counter-terrorist defuses, above), the round's for the
+	// terrorists, and for the counter-terrorists one each over the sites, rotating (SiteRotation).
 	const AShooterBomb* Bomb = GameMode->GetBomb();
-	if (State->GetBombState() == EShooterBombState::Planted && Bomb != nullptr)
+	const bool bPlanted = State->GetBombState() == EShooterBombState::Planted && Bomb != nullptr;
+	const TArray<FName>& Sites = GameMode->GetBombSiteNames();
+	FName Site = NAME_None;
+	if (bPlanted)
 	{
-		// Both teams go to the bomb: the T to guard it, the CT to retake the site.
-		Goal = Bomb->GetActorLocation();
+		Site = Bomb->GetSite();
 	}
-	else
+	else if (Self->GetTeam() == EShooterTeam::T)
 	{
-		// The terrorists go for the round's site; the CT split over the sites and rotate (SiteRotation).
-		const TArray<FName>& Sites = GameMode->GetBombSiteNames();
-		const FName Site = Self->GetTeam() == EShooterTeam::T
-			? GameMode->GetTerroristTargetSite()
-			: (Sites.Num() > 0 ? Sites[(GetTeamIndex() + SiteRotation) % Sites.Num()] : NAME_None);
-		if (!GameMode->GetBombSiteLocation(Site, Goal))
-		{
-			StandStill();
-			return EBTNodeResult::Succeeded;
-		}
+		Site = GameMode->GetTerroristTargetSite();
 	}
-	if (FVector::DistSquared2D(Self->GetActorLocation(), Goal) <= FMath::Square(GoalReachedDistance))
+	else if (Sites.Num() > 0)
 	{
-		HoldAndLookAround(DeltaTime);
-		// A CT that held its site RotateTime with no contact moves on to the next one.
-		const float Now = GetWorldTime();
-		if (HoldingSinceTime < 0.0f)
-		{
-			HoldingSinceTime = Now;
-		}
-		else if (Self->GetTeam() == EShooterTeam::CT && State->GetBombState() != EShooterBombState::Planted &&
-			RotateTime > 0.0f && Now - HoldingSinceTime >= RotateTime)
-		{
-			++SiteRotation;
-			HoldingSinceTime = -1.0f;
-		}
+		Site = Sites[(GetTeamIndex() + SiteRotation) % Sites.Num()];
+	}
+	const TArray<FShooterLookout>& Lookouts = GameMode->GetBombSiteLookouts(Site);
+	if (Lookouts.Num() == 0)
+	{
+		StandStill();
 		return EBTNodeResult::Succeeded;
 	}
-	HoldingSinceTime = -1.0f;
-	MoveToGoal(Goal);
-	return EBTNodeResult::Running;
+	if (Site != LookoutSite)
+	{
+		// A new site: its lookouts spread over the team (the bot's place in it).
+		LookoutSite = Site;
+		LookoutIndex = GetTeamIndex();
+		LookoutLeaveTime = -1.0f;
+		HoldingSinceTime = -1.0f;
+	}
+	LookoutIndex %= Lookouts.Num();
+	const FShooterLookout& Lookout = Lookouts[LookoutIndex];
+	const FVector Feet = Self->GetActorLocation();
+	if (FVector::DistSquared2D(Feet, Lookout.Location) > FMath::Square(GoalReachedDistance) ||
+		FMath::Abs(Feet.Z - Lookout.Location.Z) > LookoutReachHeight)
+	{
+		LookoutLeaveTime = -1.0f;
+		MoveToGoal(Lookout.Location);
+		// Near it already, the bot looks where it will watch (the main way in) as it walks in.
+		const TArray<float, TInlineAllocator<4>>& Yaws = Lookout.GetWatchYaws(Self->GetTeam());
+		if (Yaws.Num() > 0 && FVector::DistSquared2D(Feet, Lookout.Location) <= FMath::Square(LookoutApproachDistance))
+		{
+			LookToward(FRotator(0.0f, Yaws[0], 0.0f), LookTurnRate, DeltaTime);
+		}
+		return EBTNodeResult::Running;
+	}
+	// At the lookout: watch its ways in, then on to another of the site's lookouts (CS's bots check the corners).
+	const float Now = GetWorldTime();
+	if (HoldingSinceTime < 0.0f)
+	{
+		HoldingSinceTime = Now;
+	}
+	if (LookoutLeaveTime < 0.0f)
+	{
+		LookoutLeaveTime = Now + BotRandom.FRandRange(LookoutMinTime, LookoutMaxTime);
+		++NumLookoutsVisited;
+		WatchYaws.Reset();
+	}
+	Watch(Lookout.GetWatchYaws(Self->GetTeam()), DeltaTime);
+	if (Self->GetTeam() == EShooterTeam::CT && !bPlanted && RotateTime > 0.0f && Now - HoldingSinceTime >= RotateTime)
+	{
+		// A CT that held its site RotateTime with no contact moves on to the next one.
+		++SiteRotation;
+		HoldingSinceTime = -1.0f;
+	}
+	else if (Now >= LookoutLeaveTime && Lookouts.Num() > 1)
+	{
+		LookoutIndex = (LookoutIndex + 1 + BotRandom.RandHelper(Lookouts.Num() - 1)) % Lookouts.Num();
+		LookoutLeaveTime = -1.0f;
+	}
+	return EBTNodeResult::Succeeded;
 }
 
 // The radio
@@ -1143,6 +1349,33 @@ void AShooterAIController::OnRadioMessage(const FShooterRadioEntry& Entry)
 	if (Self == nullptr || !Self->IsAlive() || Entry.Message != EShooterRadioMessage::EnemySpotted)
 	{
 		return;
+	}
+	// A counter-terrorist holding a site hears of an enemy at another site: it may rotate there (CS's bots' rotations).
+	const AShooterGameMode* GameMode = GetShooterGameMode();
+	const AShooterGameState* State = GameMode != nullptr ? GameMode->GetShooterGameState() : nullptr;
+	if (Self->GetTeam() == EShooterTeam::CT && HoldingSinceTime >= 0.0f && State != nullptr &&
+		State->GetBombState() != EShooterBombState::Planted)
+	{
+		const TArray<FName>& Sites = GameMode->GetBombSiteNames();
+		int32 Reported = INDEX_NONE;
+		float ReportedDistSq = FMath::Square(SiteReportRadius);
+		for (int32 Index = 0; Index < Sites.Num(); ++Index)
+		{
+			FVector SiteLocation = FVector::ZeroVector;
+			if (GameMode->GetBombSiteLocation(Sites[Index], SiteLocation) &&
+				FVector::DistSquared2D(SiteLocation, Entry.Location) <= ReportedDistSq)
+			{
+				Reported = Index;
+				ReportedDistSq = FVector::DistSquared2D(SiteLocation, Entry.Location);
+			}
+		}
+		if (Reported != INDEX_NONE && Sites[Reported] != LookoutSite && BotRandom.FRand() < RotateOnReportChance)
+		{
+			const int32 Held = (GetTeamIndex() + SiteRotation) % Sites.Num();
+			SiteRotation += (Reported - Held + Sites.Num()) % Sites.Num();
+			HoldingSinceTime = -1.0f;
+			return;
+		}
 	}
 	// A teammate's enemy near this bot, while it fights nobody, has nothing else to look at and holds no site (a
 	// counter-terrorist at its site stays there): it goes to look.
@@ -1195,14 +1428,149 @@ void AShooterAIController::StandStill()
 	bHasGoal = false;
 }
 
-void AShooterAIController::HoldAndLookAround(float DeltaTime)
+void AShooterAIController::LookToward(const FRotator& Wanted, float Rate, float DeltaTime)
+{
+	FRotator Look = GetControlRotation();
+	const float MaxStep = Rate * DeltaTime;
+	Look.Yaw += FMath::Clamp(FRotator::NormalizeAxis(Wanted.Yaw - Look.Yaw), -MaxStep, MaxStep);
+	Look.Pitch += FMath::Clamp(FRotator::NormalizeAxis(Wanted.Pitch - Look.Pitch), -MaxStep, MaxStep);
+	Look.Pitch = FMath::Clamp(Look.Pitch, -89.0f, 89.0f);
+	Look.Roll = 0.0f;
+	SetControlRotation(Look);
+	bLookedThisTick = true;
+}
+
+void AShooterAIController::Watch(const TArray<float, TInlineAllocator<4>>& Yaws, float DeltaTime)
 {
 	StandStill();
-	FRotator Look = GetControlRotation();
-	constexpr float LookAroundRate = 30.0f;
-	Look.Yaw += LookAroundRate * DeltaTime;
-	Look.Pitch = 0.0f;
-	SetControlRotation(Look);
+	bLookedThisTick = true;
+	if (Yaws.Num() == 0)
+	{
+		return;
+	}
+	// The main way in first and between each of the others (CS's bots keep their aim on the approach); the others in
+	// turn from one drawn from the stream.
+	const float Now = GetWorldTime();
+	if (!(WatchYaws == Yaws))
+	{
+		WatchYaws = Yaws;
+		WatchIndex = 0;
+		WatchOther = WatchYaws.Num() > 1 ? BotRandom.RandHelper(WatchYaws.Num() - 1) : 0;
+		NextWatchTime = Now + (2.0f * BotRandom.FRandRange(WatchMinTime, WatchMaxTime));
+	}
+	else if (Now >= NextWatchTime)
+	{
+		const bool bToOther = WatchIndex == 0 && WatchYaws.Num() > 1;
+		if (bToOther)
+		{
+			WatchOther = (WatchOther % (WatchYaws.Num() - 1)) + 1;
+		}
+		WatchIndex = bToOther ? WatchOther : 0;
+		NextWatchTime = Now + ((bToOther ? 1.0f : 2.0f) * BotRandom.FRandRange(WatchMinTime, WatchMaxTime));
+	}
+	LookToward(FRotator(0.0f, WatchYaws[WatchIndex], 0.0f), LookTurnRate, DeltaTime);
+}
+
+void AShooterAIController::UpdatePickupTarget()
+{
+	const AShooterCharacter* Self = GetShooterPawn();
+	const AShooterGameMode* GameMode = GetShooterGameMode();
+	const float Now = GetWorldTime();
+	// The one chosen, while it lies there for this bot; a walk to it that lasts too long is given up for the round.
+	if (const AShooterWeapon* Current = PickupTarget.Get())
+	{
+		const bool bTooLong = Now - PickupChosenTime > PickupGiveUpTime;
+		if (bTooLong)
+		{
+			GivenUpPickup = PickupTarget;
+		}
+		if (bTooLong || !Current->IsDropped() || Self == nullptr || !Current->CanBePickedUpBy(*Self))
+		{
+			PickupTarget.Reset();
+		}
+	}
+	if (Now < NextPickupCheckTime)
+	{
+		return;
+	}
+	NextPickupCheckTime = Now + PickupCheckInterval;
+	if (Self == nullptr || GameMode == nullptr || !Self->IsAlive() || Self->IsFrozen())
+	{
+		PickupTarget.Reset();
+		return;
+	}
+	// A loaded primary: nothing to go for. Without one, a primary within PickupSearchDistance; out of ammunition
+	// altogether, any weapon with ammunition within twice that.
+	const AShooterWeapon* Primary = Self->GetWeaponInSlot(EShooterWeaponSlot::Primary);
+	const AShooterWeapon* Secondary = Self->GetWeaponInSlot(EShooterWeaponSlot::Secondary);
+	if (Primary != nullptr && Primary->HasAmmo())
+	{
+		PickupTarget.Reset();
+		return;
+	}
+	const bool bOutOfAmmo = Secondary == nullptr || !Secondary->HasAmmo();
+	const float Range = bOutOfAmmo ? PickupSearchDistance * 2.0f : PickupSearchDistance;
+	const FVector Feet = Self->GetActorLocation();
+	AShooterWeapon* Best = nullptr;
+	float BestDistSq = FMath::Square(Range);
+	for (AActor* Pickup : GameMode->GetPickups())
+	{
+		AShooterWeapon* Weapon = Cast<AShooterWeapon>(Pickup);
+		if (Weapon == nullptr || Weapon == GivenUpPickup.Get() || !Weapon->IsDropped() || !Weapon->HasAmmo() ||
+			(!bOutOfAmmo && Weapon->Slot != EShooterWeaponSlot::Primary) || !Weapon->CanBePickedUpBy(*Self) ||
+			FMath::Abs(Weapon->GetActorLocation().Z - Feet.Z) > PickupMaxHeight)
+		{
+			continue;
+		}
+		const float DistSq = FVector::DistSquared2D(Weapon->GetActorLocation(), Feet);
+		if (DistSq < BestDistSq)
+		{
+			Best = Weapon;
+			BestDistSq = DistSq;
+		}
+	}
+	if (Best != PickupTarget.Get())
+	{
+		PickupTarget = Best;
+		PickupChosenTime = Now;
+	}
+}
+
+void AShooterAIController::UpdateLadderClimb(AShooterCharacter& Self)
+{
+	const UShooterCharacterMovement* Move = Self.GetShooterCharacterMovement();
+	const ATriggerVolume* Ladder = Move != nullptr && Move->IsOnLadder() ? Move->GetLadder() : nullptr;
+	if (Ladder == nullptr)
+	{
+		return;
+	}
+	if (!HasMoveTarget())
+	{
+		// Standing on a ladder: it hangs there to fight, and lets go otherwise.
+		if (CurrentTask != EngageTaskName && CurrentTask != BlindTaskName)
+		{
+			Self.Jump();
+		}
+		return;
+	}
+	// The path's point at the ladder's top: up, facing it; well below the feet: down, facing it and looking down; at
+	// the feet's height (the bottom): off it (the jump pushes it off the face).
+	const FVector PathPoint = GetCurrentTargetLocation();
+	const FBox Box = Ladder->GetBrushBounds();
+	float Pitch = 0.0f;
+	if (PathPoint.Z < Box.Max.Z - LadderEndTolerance)
+	{
+		if (PathPoint.Z >= Self.GetActorLocation().Z - LadderEndTolerance)
+		{
+			Self.Jump();
+			return;
+		}
+		Pitch = LadderDownPitch;
+	}
+	const FVector Face = -Move->GetLadderNormal();
+	SetControlRotation(FRotator(Pitch, Face.Rotation().Yaw, 0.0f));
+	bLookedThisTick = true;
+	Self.AddMovementInput(Face);
 }
 
 void AShooterAIController::ReleaseTrigger()
@@ -1264,7 +1632,9 @@ void AShooterAIController::Tick(float DeltaSeconds)
 	UpdateBlackboard();
 	bAimedLastTick = bAimedThisTick;
 	bAimedThisTick = false;
+	bLookedThisTick = false;
 	bStrafingThisTick = false;
+	bRushingThisTick = false;
 	(void)Tree.Tick(DeltaSeconds);
 	// Only the engagement crouches the pawn for its fire.
 	if (CurrentTask != EngageTaskName)
@@ -1272,23 +1642,35 @@ void AShooterAIController::Tick(float DeltaSeconds)
 		EndCombatCrouch();
 	}
 	// The steering along the path (AAIController's path following); a pawn that stands has no target. The strafe
-	// replaces the standing pawn's wish, at the walk key's speed.
+	// replaces the standing pawn's wish, at the walk key's speed (the knife's rush runs). With nobody to aim at, the
+	// bot looks along its path; on a ladder it climbs.
 	const AShooterGameMode* GameMode = GetShooterGameMode();
 	if (Self->IsAlive() && !Self->IsFrozen() && (GameMode == nullptr || !GameMode->bBotStop))
 	{
+		if (!bAimedThisTick && !bLookedThisTick && HasMoveTarget())
+		{
+			const FVector Ahead = GetCurrentTargetLocation() - Self->GetActorLocation();
+			if (Ahead.SizeSquared2D() > FMath::Square(LookAheadMinDistance))
+			{
+				LookToward(FRotator(0.0f, Ahead.Rotation().Yaw, 0.0f), LookTurnRate, DeltaSeconds);
+			}
+		}
 		(void)TickAI(DeltaSeconds);
 		if (bStrafingThisTick)
 		{
 			Self->AddMovementInput(StrafeWish);
 		}
+		UpdateLadderClimb(*Self);
 	}
 	else if (bStrafedLastTick)
 	{
 		Self->AddMovementInput(FVector::ZeroVector);
 	}
-	if (bStrafeWalking && bStrafingThisTick != bStrafedLastTick)
+	const bool bWantsWalk = bStrafeWalking && bStrafingThisTick && !bRushingThisTick;
+	if (bWantsWalk != bWalkingForStrafe)
 	{
-		Self->SetWalking(bStrafingThisTick);
+		Self->SetWalking(bWantsWalk);
+		bWalkingForStrafe = bWantsWalk;
 	}
 	bStrafedLastTick = bStrafingThisTick;
 }

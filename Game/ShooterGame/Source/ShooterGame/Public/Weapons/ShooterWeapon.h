@@ -44,9 +44,9 @@ class UStaticMeshComponent;
  *
  * On the floor (OnDropped): a weapon a pawn dropped or left when it died lies where it fell, Mesh3P shown, among the
  * game mode's pickups, and is picked up (AShooterCharacter::PickUpWeapon: the draw's sound and the HUD's notice) by the
- * first live pawn of the game mode's pawns that walks within PickupRadius and has its slot free, after PickupDelay (so
- * the pawn that dropped it does not take it back at once). It keeps its ammunition and its state (the silencer, the
- * burst mode).
+ * first live pawn of the game mode's pawns that walks within PickupRadius and may take it (CanBePickedUpBy: its slot
+ * free; a bot's spent weapon there is swapped for it, AddWeapon dropping the spent one), after PickupDelay (so the pawn
+ * that dropped it does not take it back at once). It keeps its ammunition and its state (the silencer, the burst mode).
  *
  * Timing: the fire rate counts in the weapon's tick against the world's time: a shot every GetTimeBetweenShots while
  * the trigger is held (automatic) or once per press (semi-automatic); the draw and the reload are timers. Firing with
@@ -247,6 +247,11 @@ public:
 	{
 		return bDropped;
 	}
+	/**
+	 * Pawn may take the weapon from the floor: its slot is free, or (a bot's, ps2-polish P3) the weapon there has no
+	 * ammunition left and this one has some; AddWeapon then drops the spent one.
+	 */
+	[[nodiscard]] bool CanBePickedUpBy(const AShooterCharacter& Pawn) const;
 	/** Drawn: shown on the pawn, ready after EquipDuration (UE ShooterGame: OnEquip). */
 	virtual void OnEquip();
 	/** Put away: the trigger, the reload and the zoom stop, the meshes hide (UE ShooterGame: OnUnEquip). */
@@ -433,7 +438,7 @@ protected:
 	}
 	/** A shot's buzz on the owner's pad, when a player at this machine holds it (ps2-shipping N24). */
 	void PlayFireForceFeedback() const;
-	/** On the floor: the first live pawn near enough with the slot free takes the weapon. */
+	/** On the floor: the first live pawn near enough that may take it (CanBePickedUpBy) takes the weapon. */
 	void TickPickup();
 	/** The world's time (UWorld::GetTimeSeconds). */
 	[[nodiscard]] float GetWorldTime() const;

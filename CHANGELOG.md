@@ -55,6 +55,30 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   Tests: `ShooterGame.Input.CrouchToggleAndHold`, `.DropAndPickUpWeapon`, `.DropAndPickUpBomb`; `Settings.RoundTrip` and
   `Config.InputAndChannels` updated (102 ShooterGame tests). The bot match is unchanged
   (`Botmatch OK: 9 round(s), CT 3 - T 6, 55 kill(s), seed 7, sides switched after round 5`).
+- ShooterGame's bots rush with the knife, pick up weapons, watch the sites and climb ladders
+  ([ps2-polish](Docs/PLANS/ps2-polish.md) P3). With the knife a bot runs the path to its enemy and cuts only within
+  reach: a stab when the enemy's back is turned, else slashes as it circles in (`EngageWithKnife`); a fight never draws
+  a grenade (`AShooterCharacter::EquipBestWeapon(false)`). A bot without a loaded primary goes for one on the floor
+  within `PickupSearchDistance` (15 m), and out of ammunition for any loaded weapon within 30 m (the `PickUp` branch):
+  `AShooterWeapon::CanBePickedUpBy` lets a bot swap a spent weapon for it (the player keeps CS's walk-over into a free
+  slot). With no enemy in sight the bots keep the sites' lookouts (`AShooterGameMode::GetBombSiteLookouts`: the map's
+  waypoints flagged `Lookout`, else the site's nearest waypoints), turning between each team's directions there (first
+  the main way in: the graph's path toward the other team's spawn) and moving from one to another; the terrorists
+  escort the carrier watching its flanks and take the site's lookouts once it is near; the counter-terrorists rotate
+  after `RotateTime` or on a teammate's report at the other site (`RotateOnReportChance`); the terrorists hunt with
+  `HuntTimeLeft` (30 s) left; the hunt roams the waypoints; a bot on the move looks along its path. Ladders: the
+  navigation links two waypoints flagged `Ladder` across the climb (`FWaypointLinkParams::MaxLadderLinkDistance`),
+  the path follower does not jump at them (`AAIController::GetCurrentTargetLocation`, UE's), and the bots climb up
+  and down facing the ladder (`UShooterCharacterMovement::GetLadderNormal`); `bCanClimbLadders` and
+  `HoldAndLookAround` are gone (`CheckBannedApis.ps1`). de_leon gets six lookouts off the lanes' line, the ladders'
+  feet and tops, and CT starts out of the mid doors' line (the terrorists' spawn saw them across the map). The bots
+  see enemies within `SightRadius` (35 m). Over seeds 1 to 24 the terrorists now win 49 % of the rounds (60 % before).
+  A scene component's `DetachAllChildren` no longer loops for ever on a child that points to another parent (a bot
+  match hung in the exit's collection).
+  Tests: `ShooterGame.Bots.KnifeRushesAndKills`, `.PicksUpAWeaponOutOfAmmo`, `.VisitsLookouts`, `.ClimbsALadder`,
+  `System.AIModule.Gameplay.NavigationAutoLinkLadders`; `ShooterGame.Map.DeLeonHoldsTheGame` and
+  `.Movement.Ladder` and `System.Engine.Components.AttachmentRulesAndSockets` extended (109 ShooterGame tests). The
+  bot match logs `Botmatch OK: 8 round(s), CT 2 - T 6, 55 kill(s), seed 7, sides switched after round 5`.
 
 ### Changed
 

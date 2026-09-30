@@ -76,6 +76,10 @@
 #                                            -> removed in ps2-polish P5: UFont (the engine's DejaVu Sans Condensed,
 #                                               UEngine::GetSmallFont ...), FCanvas::DrawText / MeasureText with a font,
 #                                               FCanvasTextItem, UFont::GetLineHeight
+#   ShooterGame's bots that walked through ladders and spun in place (bCanClimbLadders, HoldAndLookAround)
+#                                            -> removed in ps2-polish P3: the bots climb (UShooterCharacterMovement::
+#                                               GetLadderNormal, the waypoints' Ladder links) and watch the sites'
+#                                               lookouts (AShooterGameMode::GetBombSiteLookouts)
 #   FLegacyCoordinateConversion and LegacyCoordinateConversion.h
 #                                            -> UE-space data; only tests convert legacy (Y up, metres) data, the
 #                                               golden tables: see $TestsOnly
@@ -176,6 +180,9 @@ $Rules = @(
 	@{ Name = "the HUD's bitmap font (ps2-polish P5)"
 		Pattern = '\bstb_easy_font\w*|<stb_easy_font\.h>|\bHudFontScale\b|\bHudLineHeight\b|\bDrawTextBlock\b|\bMeasureTextOnly\b'
 		Use = "UFont (UEngine::GetTinyFont .. GetLargeFont), FCanvas::DrawText / MeasureText with a font, FCanvasTextItem, UFont::GetLineHeight; UMG's FSlateFontInfo" },
+	@{ Name = "ShooterGame's bots that walked through ladders and spun in place (ps2-polish P3)"
+		Pattern = '\b(bCanClimbLadders|HoldAndLookAround)\b'
+		Use = "the bots climb (UShooterCharacterMovement::GetLadderNormal, the waypoints' Ladder links) and watch the sites' lookouts (AShooterGameMode::GetBombSiteLookouts, AShooterAIController's Watch)" },
 	@{ Name = "legacy GL / transform / axes"; Pattern = 'LegacyGL|FLegacyTransform|LegacyAxes'
 		Use = "UE view and projection matrices (ToGLClipSpace last), FTransform, UE axes" },
 	@{ Name = "legacy coordinate conversion outside the tests"

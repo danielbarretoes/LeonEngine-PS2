@@ -19,6 +19,27 @@ class APlayerStart;
 class ATriggerVolume;
 
 /**
+ * A spot the bots watch a bomb site from (ps2-polish P3; CS's bots' hiding and approach spots): the map's waypoints
+ * flagged `Lookout`, each given to its nearest site (AShooterGameMode::GetBombSiteLookouts).
+ */
+struct FShooterLookout
+{
+	/** Where the watcher stands (the waypoint's floor). */
+	FVector Location = FVector::ZeroVector;
+	/**
+	 * The yaws a team's watcher turns between, degrees (EShooterTeam as the index): first the main way in (the first
+	 * link of the waypoint graph's path to the other team's spawn), then over the site from a spot away from it and the
+	 * spot's other links toward that spawn (without any, its links), at most four, 35 degrees apart or more.
+	 */
+	TArray<float, TInlineAllocator<4>> WatchYaws[3];
+
+	[[nodiscard]] const TArray<float, TInlineAllocator<4>>& GetWatchYaws(EShooterTeam Team) const
+	{
+		return WatchYaws[static_cast<int32>(Team)];
+	}
+};
+
+/**
  * ShooterGame's rules (UE ShooterGame: AShooterGameMode), the game mode of every map through GlobalDefaultGameMode
  * (plan decision D18): Counter-Strike's defusal rules, teams, rounds, money, buying and the bomb.
  *
@@ -92,7 +113,7 @@ class ATriggerVolume;
  * (the pickups: dropped weapons, the dropped bomb). Each keeps the level's order, so what walked the level before finds
  * the same actors in the same order. The bomb sites (by name, with their places) and each team's starts are sorted out
  * once, when a volume or a start joins or goes. A world without a ShooterGameMode has no registries: nothing is picked
- * up there.
+ * up there. The bots' lookouts of each site (GetBombSiteLookouts) are made once from the waypoint graph.
  *
  * Console (the Exec chain reaches the game mode): `bot_add_ct [N]`, `bot_add_t [N]`, `bot_add [N]` (the smaller team),
  * `bot_fill` (both teams to MaxPlayersPerTeam; the G6 smoke: `ShooterGame -nullrhi -ExecCmds=bot_fill`),
@@ -426,6 +447,17 @@ public:
 	/** Where a team spawns: its first start (level order), false without one (the bots' hunt goal). */
 	bool GetTeamSpawnLocation(EShooterTeam Team, FVector& OutLocation) const;
 	/**
+	 * The spots the bots watch Site from (FShooterLookout; ps2-polish P3): the waypoints flagged `Lookout` nearest to
+	 * it; a map without them, the site's nearest waypoints (up to three within LookoutFallbackRadius), else its middle,
+	 * watching around from the other team's side. Made once from the world's waypoint graph (again when the sites or
+	 * the graph change); empty for a site the map does not have.
+	 */
+	[[nodiscard]] const TArray<FShooterLookout>& GetBombSiteLookouts(FName Site) const;
+
+	/** A map without lookouts: how near a site its waypoints stand in for them, cm. */
+	UPROPERTY(Config)
+	float LookoutFallbackRadius = 1500.0f;
+	/**
 	 * The live pawns of a team (CountPawns), counted once a frame: the count holds until the world's time moves on or
 	 * NotifyPawnsChanged.
 	 */
@@ -644,6 +676,16 @@ private:
 	mutable TArray<ATriggerVolume*> BombSiteZones;
 	mutable TArray<APlayerStart*> TeamStarts[3];
 	mutable bool bMapCachesDirty = true;
+
+	/** Makes the sites' lookouts (GetBombSiteLookouts) from the world's waypoint graph. */
+	void BuildBombSiteLookouts() const;
+	/**
+	 * Each site's lookouts (BombSiteNames' order), the waypoint graph's node count they were made from, and whether the
+	 * sites changed since.
+	 */
+	mutable TArray<TArray<FShooterLookout>> BombSiteLookouts;
+	mutable int32 LookoutsNodeCount = -1;
+	mutable bool bLookoutsDirty = true;
 
 	/** CountAlive's count (EShooterTeam as the index), with the world time and the pawns' serial it was counted at. */
 	uint32 PawnsSerial = 0;

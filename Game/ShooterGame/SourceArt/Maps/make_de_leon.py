@@ -27,7 +27,9 @@ centimetres). Node names follow the map importer's rules (Docs/LEVELS.md, Game/S
     BuyZone_CT / _T           ATriggerVolume [BuyZone, CT|T]
     Ladder_A / _B             ATriggerVolume [Ladder]: a 20 cm box against its wall, floor to roof (N30c)
     Clip_*                    ABlockingVolume (an invisible wall)
-    NavWaypoint_*             ANavigationWaypoint; the custom property "links" names the waypoints it leads to
+    NavWaypoint_*             ANavigationWaypoint; the custom property "links" names the waypoints it leads to, "flags"
+                              what the bots make of it: Lookout (a spot they watch a site from), Ladder (a ladder's
+                              foot and top: the import links them across the climb)
     Sun, Light_<Place>_NN     the directional light and the point lights (KHR_lights_punctual, RAW intensities)
     VIS_<Cell>, PORTAL_<A>_<B>  the cells (box meshes: AVisibilityCellVolume) and the openings between them (quad
                               meshes: AVisibilityPortal), N15's rules (Engine/Config/BaseEditor.ini)
@@ -749,7 +751,10 @@ def build_cells(b):
 
 
 # The waypoint graph: the main routes, linked by hand both ways; the import adds the links a player can walk
-# (bAutoLinkWaypoints in Config/DefaultEditor.ini).
+# (bAutoLinkWaypoints in Config/DefaultEditor.ini). The lookouts are the sites' watch spots (ps2-polish P3: the bots
+# watch the ways in from them), out of the long lanes' sight from the terrorists' side (behind the crates, off the
+# lanes' line, in the corners by the houses); the ladders' feet and tops (on the roofs, ROOF_WAYPOINTS) are linked
+# across the climb by the import (both flagged Ladder).
 WAYPOINTS = {
     "TSpawn": (-24.0, 0.0), "TMid": (-17.0, 0.0), "TPlazaA": (-18.0, 16.0), "TPlazaB": (-18.0, -16.0),
     "LongAGate": (-14.0, 16.0), "TunnelB": (-10.0, -16.0),
@@ -758,6 +763,19 @@ WAYPOINTS = {
     "MidDoors": (9.5, 0.0), "CTMid": (12.0, -1.0), "AConnector": (11.5, 11.0), "BConnector": (11.5, -11.0),
     "SiteA": (19.0, 18.0), "SiteB": (19.0, -17.0), "CTSpawn": (25.0, 0.0), "CTA": (26.0, 10.0),
     "CTB": (26.0, -10.0),
+    "LookoutA1": (24.5, 22.5), "LookoutA2": (20.6, 15.0), "LookoutA3": (21.0, 10.1),
+    "LookoutB1": (19.0, -22.5), "LookoutB2": (27.2, -13.5), "LookoutB3": (21.0, -10.1),
+    "LadderAFoot": (5.5, 12.8), "LadderBFoot": (5.5, -12.8),
+}
+# On the roofs of the blocks north of the longs, up the ladders: (x, y, the roof's height).
+ROOF_WAYPOINTS = {
+    "LadderATop": (5.5, 11.2, 3.5), "RoofA": (4.0, 8.0, 3.5),
+    "LadderBTop": (5.5, -11.2, 3.5), "RoofB": (4.0, -8.0, 3.5),
+}
+WAYPOINT_FLAGS = {
+    "LookoutA1": "Lookout", "LookoutA2": "Lookout", "LookoutA3": "Lookout",
+    "LookoutB1": "Lookout", "LookoutB2": "Lookout", "LookoutB3": "Lookout",
+    "LadderAFoot": "Ladder", "LadderATop": "Ladder", "LadderBFoot": "Ladder", "LadderBTop": "Ladder",
 }
 LINKS = [
     ("TSpawn", "TMid"), ("TSpawn", "TPlazaA"), ("TSpawn", "TPlazaB"), ("TMid", "Mid"), ("TPlazaA", "LongAGate"),
@@ -766,9 +784,17 @@ LINKS = [
     ("ALongEnd", "AConnector"), ("BLongEnd", "BConnector"), ("MidDoors", "CTMid"), ("CTMid", "AConnector"),
     ("CTMid", "BConnector"), ("AConnector", "SiteA"), ("BConnector", "SiteB"), ("CTMid", "CTSpawn"),
     ("CTSpawn", "CTA"), ("CTSpawn", "CTB"), ("CTA", "SiteA"), ("CTB", "SiteB"),
+    ("LookoutA1", "SiteA"), ("LookoutA2", "SiteA"), ("LookoutA3", "AConnector"), ("LookoutA3", "CTA"),
+    ("LookoutB1", "SiteB"), ("LookoutB2", "CTB"), ("LookoutB3", "BConnector"), ("LookoutB3", "CTB"),
+    ("LadderAFoot", "LongA"), ("LadderAFoot", "ALongEnd"), ("LadderBFoot", "LongB"), ("LadderBFoot", "BLongEnd"),
 ]
+# The roofs' links (a roof's waypoints stand over the block, which check_navigation's floor plan does not see).
+ROOF_LINKS = [("LadderATop", "RoofA"), ("LadderBTop", "RoofB")]
 SITES = {"A": ((13.0, 12.0), (27.0, 22.0)), "B": ((13.0, -22.0), (27.0, -12.0))}
-CT_STARTS = [(26.5, y) for y in (-4.0, -2.0, 0.0, 2.0, 4.0)]
+# The CT starts stand out of the line of the mid doors and the mid arch (ps2-polish P3: at Y within 4 m of the middle
+# the terrorists' spawn saw them across the whole map), A's side and B's side in turn (the bots' sites: A for the even,
+# B for the odd of the team).
+CT_STARTS = [(26.5, 6.0), (26.5, -6.0), (28.5, 6.5), (28.5, -6.5), (24.5, 7.0)]
 T_STARTS = [(-26.5, y) for y in (-4.0, -2.0, 0.0, 2.0, 4.0)]
 
 
@@ -805,22 +831,26 @@ def build_gameplay(b):
     # The bomb sites and the buy zones (trigger volumes, 3 m high).
     for site, ((x0, y0), (x1, y1)) in SITES.items():
         b.volume("Gameplay", "BombSite_" + site, (x0, y0, 0.0), (x1, y1, 3.0))
-    b.volume("Gameplay", "BuyZone_CT", (22.0, -6.0, 0.0), (29.0, 6.0, 3.0))
+    b.volume("Gameplay", "BuyZone_CT", (22.0, -8.0, 0.0), (29.5, 8.0, 3.0))
     b.volume("Gameplay", "BuyZone_T", (-29.0, -8.0, 0.0), (-22.0, 8.0, 3.0))
 
-    # Five starts a team, 2 m apart: the CTs face south, the Ts north.
+    # Five starts a team, 2 m apart or more: the CTs face south, the Ts north.
     for index, ((ctx, cty), (tx, ty)) in enumerate(zip(CT_STARTS, T_STARTS)):
         suffix = "" if index == 0 else ".%03d" % index
         b.empty("Gameplay", "PlayerStart_CT" + suffix, (ctx, cty, START_HEIGHT), "ARROWS", yaw=180.0)
         b.empty("Gameplay", "PlayerStart_T" + suffix, (tx, ty, START_HEIGHT), "ARROWS", yaw=0.0)
 
-    neighbours = {name: [] for name in WAYPOINTS}
-    for a, c in LINKS:
+    places = dict((name, (x, y, 0.0)) for name, (x, y) in WAYPOINTS.items())
+    places.update(ROOF_WAYPOINTS)
+    neighbours = {name: [] for name in places}
+    for a, c in LINKS + ROOF_LINKS:
         neighbours[a].append(c)
         neighbours[c].append(a)
-    for name, (x, y) in WAYPOINTS.items():
-        obj = b.empty("Navigation", "NavWaypoint_" + name, (x, y, 0.5), "SPHERE", (0.3, 0.3, 0.3))
+    for name, (x, y, height) in places.items():
+        obj = b.empty("Navigation", "NavWaypoint_" + name, (x, y, height + 0.5), "SPHERE", (0.3, 0.3, 0.3))
         obj["links"] = ",".join("NavWaypoint_" + other for other in sorted(neighbours[name]))
+        if name in WAYPOINT_FLAGS:
+            obj["flags"] = WAYPOINT_FLAGS[name]
 
 
 def build_sun(b):

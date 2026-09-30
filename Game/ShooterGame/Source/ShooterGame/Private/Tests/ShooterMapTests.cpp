@@ -173,6 +173,27 @@ bool FShooterMapDeLeonHoldsTheGameTest::RunTest(const FString& Parameters)
 		}
 	}
 	TestTrue("Linked", NumLinks >= 2 * Waypoints.Num() - 2);
+	// ps2-polish P3: three lookouts a site, and each ladder's foot linked to its top on the roof (the import's link
+	// across the climb); the CT starts out of the mid doors' line.
+	int32 NumLookouts = 0;
+	int32 NumClimbs = 0;
+	for (const ANavigationWaypoint* Waypoint : Waypoints)
+	{
+		NumLookouts += Waypoint->HasFlag(TEXT("Lookout")) ? 1 : 0;
+		for (const ANavigationWaypoint* Linked : Waypoint->Links)
+		{
+			NumClimbs += Waypoint->HasFlag(TEXT("Ladder")) && Linked->HasFlag(TEXT("Ladder")) &&
+					Linked->GetActorLocation().Z - Waypoint->GetActorLocation().Z > 300.0f
+				? 1
+				: 0;
+		}
+	}
+	TestEqual("Six lookouts", NumLookouts, 6);
+	TestEqual("Two ladders climbed", NumClimbs, 2);
+	for (const APlayerStart* Start : FindTeamStarts(*World, TEXT("CT")))
+	{
+		TestTrue("A CT start out of the mid doors' line", FMath::Abs(Start->GetActorLocation().Y) >= 550.0f);
+	}
 	TestEqual("A player clip", FindActors<ABlockingVolume>(*World).Num(), 1);
 	TestEqual("Two ladders", FindActors<ATriggerVolume>(*World, FName(TEXT("Ladder"))).Num(), 2);
 	TestEqual("The sun", FindActors<ADirectionalLight>(*World).Num(), 1);

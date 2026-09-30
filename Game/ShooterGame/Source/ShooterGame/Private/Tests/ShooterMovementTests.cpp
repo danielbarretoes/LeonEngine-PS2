@@ -176,7 +176,7 @@ bool FShooterMovementLadderTest::RunTest(const FString& Parameters)
 	// A ladder on the face of a 4 m block (a trigger volume tagged Ladder, 20 cm thin): walking into it grabs it;
 	// forward looking at it climbs at CS's 200 units a second (508 cm/s), looking up 45 degrees faster (CS), straight
 	// down climbs down; no input holds the climber (no gravity); a jump pushes it off at 270 u/s and it falls; climbing
-	// on over the top ends on the roof. A bot walks along the ladder's face without grabbing it.
+	// on over the top ends on the roof. The face looks toward the climber (the bots turn to it, ps2-polish P3).
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	SpawnFloor(World);
@@ -193,9 +193,7 @@ bool FShooterMovementLadderTest::RunTest(const FString& Parameters)
 
 	AShooterCharacter* Climber = SpawnShooter(World, FVector(-200.0f, 0.0f, 0.0f), 0.0f, EShooterTeam::CT);
 	UShooterCharacterMovement& Move = *Climber->GetShooterCharacterMovement();
-	TestFalse("A bot's pawn does not climb", Move.bCanClimbLadders);
-	// The test's climber is a player's pawn.
-	Move.bCanClimbLadders = true;
+	TestTrue("No face off a ladder", Move.GetLadderNormal().IsZero());
 	AController& Controller = *Climber->GetController();
 	TestEqual("CS's climbing speed: 200 u/s", Move.LadderClimbSpeed, 200.0f * 2.54f, 0.1f);
 
@@ -210,6 +208,7 @@ bool FShooterMovementLadderTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
+	TestTrue("Its face toward the climber", Move.GetLadderNormal().Equals(FVector(-1.0f, 0.0f, 0.0f)));
 	TestTrue("A custom mode, neither walking nor falling",
 		Climber->GetMovementMode() == EMovementMode::Custom && !Climber->IsFalling() && !Climber->IsMovingOnGround());
 
@@ -273,19 +272,6 @@ bool FShooterMovementLadderTest::RunTest(const FString& Parameters)
 	TestTrue("Walking on the roof",
 		Climber->IsMovingOnGround() && FMath::IsNearlyEqual(Climber->GetActorLocation().Z, 400.0f, 1.0f) &&
 			Climber->GetActorLocation().X > 100.0f);
-
-	// A bot walks along the ladder's face, through its volume, as on any floor.
-	AShooterCharacter* Bot = SpawnShooter(World, FVector(55.0f, -300.0f, 0.0f), 90.0f, EShooterTeam::T);
-	TestTrue("It touches the ladder on its way",
-		GameMode->FindLadder(FVector(55.0f, 0.0f, 0.0f), Bot->GetCapsule().GetCapsuleRadius(), 183.0f) == Ladder);
-	bool bAlwaysWalking = true;
-	for (int32 Index = 0; Index < 45; ++Index)
-	{
-		MoveSteps(World, *Bot, FVector(0.0f, 1.0f, 0.0f), 1);
-		bAlwaysWalking &= Bot->IsMovingOnGround();
-	}
-	TestTrue("The bot kept walking", bAlwaysWalking);
-	TestTrue("And went past the ladder", Bot->GetActorLocation().Y > 200.0f);
 	return true;
 }
 

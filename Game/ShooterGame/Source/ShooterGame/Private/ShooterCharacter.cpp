@@ -1512,7 +1512,7 @@ AShooterWeapon* AShooterCharacter::FindWeaponOfClass(const UClass* WeaponClass) 
 	return nullptr;
 }
 
-void AShooterCharacter::EquipBestWeapon()
+void AShooterCharacter::EquipBestWeapon(bool bWithGrenades)
 {
 	// A spent weapon is passed over (CS: an empty rifle gives way to the pistol); the bots call this every tick they
 	// engage, so an empty primary must not win the slot order.
@@ -1520,7 +1520,7 @@ void AShooterCharacter::EquipBestWeapon()
 	for (const EShooterWeaponSlot Slot : SlotsByPreference)
 	{
 		AShooterWeapon* Weapon = GetWeaponInSlot(Slot);
-		if (Weapon == nullptr)
+		if (Weapon == nullptr || (!bWithGrenades && Slot == EShooterWeaponSlot::Grenade))
 		{
 			continue;
 		}

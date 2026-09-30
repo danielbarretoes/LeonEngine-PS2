@@ -224,7 +224,8 @@ bool FShooterGameRadioBotsReportEventsTest::RunTest(const FString& Parameters)
 	AShooterCharacter* T = Ts[0];
 	Freeze(*T);
 	T->SetGodMode(true);
-	// The terrorist ahead of the spotter; the teammate 18 m to its side, looking away.
+	// The terrorist ahead of the spotter; the teammate 18 m to its side, behind a wall (the bots look where they go).
+	SpawnWall(World, -1300.0f, 900.0f, FVector(2600.0f, 100.0f, 400.0f));
 	T->Reset(FVector(-700.0f, Spotter->GetActorLocation().Y, 0.0f), FRotator(0.0f, 180.0f, 0.0f));
 	Teammate->Reset(FVector(-1500.0f, 1500.0f, 0.0f), FRotator(0.0f, 90.0f, 0.0f));
 	GetBot(*Teammate)->SetControlRotation(FRotator(0.0f, 90.0f, 0.0f));

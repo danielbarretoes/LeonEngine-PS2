@@ -300,9 +300,9 @@ or when a waypoint link, a start or a site's middle runs into something, and pri
 ```text
        W (-Y)                   Y=0                  E (+Y)          (X north up; 1 character = 1 m across, 2 m down)
   30 ##################################################
-  28 #######                                    #######     #  walls and houses (3.5 to 5.5 m)
-  26 #######bbbbbb        + + + + +       aaaaaa#######     ^  under an arch or a lintel
-  24 #  bbbbbbbbCb                        aCaaaaacca  #     n  the B tunnel, roofed at 3 m
+  28 #######           +             +          #######     #  walls and houses (3.5 to 5.5 m)
+  26 #######bbbbbb      +           +     aaaaaa#######     ^  under an arch or a lintel
+  24 #  bbbbbbbbCb                   +    aCaaaaacca  #     n  the B tunnel, roofed at 3 m
   22 #  bcccbbbbbb                        aaaaaaaaaa  #     =  the low wall at B (1 m) and its clip
   20 #  bbbbbbbbbb  ##            cc  ##  aaaaaaaaaa  #     c  crates (1.1 m)   C  big crates (1.6 m)
   18 #  bbbbbbbbbb  ##                ##  aaccaaaaaa  #     H  ladders to the roofs (3.5 m)
@@ -355,10 +355,10 @@ wood and crates wood, the lamps metal.
 | --- | --- |
 | `<Cell>_Floor*`, `_Wall*`, `_Block*`, `_House*`, `_Arch*`, `_Gate*`, `_Tunnel*`, `_MidDoor*`, `_Door*`, `_SiteWall`, `_LowWall`, `_Sign`, `_Lamp*`, `_Ladder_*`, `_Crate*` | static mesh actors, each with its `UCX_<Node>_01` box (the ladders', the signs' and the tunnel's lamps' inside their wall, so they stop nobody); the crates' box is on their shared mesh |
 | `Clip_BLowWall` | a blocking volume: nobody jumps over the low wall at B |
-| `BombSite_A` / `_B` (14 × 10 × 3 m), `BuyZone_CT` (7 × 12 m) / `_T` (7 × 16 m) | trigger volumes tagged [`BombSite`, `A`], [`BuyZone`, `CT`], ... (ShooterGame's rules) |
-| `Ladder_A`, `Ladder_B` | trigger volumes tagged `Ladder` (N30c): 20 cm boxes against the north blocks' long faces, from the floor to their roofs (3.5 m); the bots walk through them |
-| `PlayerStart_CT` … `.004`, `PlayerStart_T` … `.004` | ten player starts, 2 m apart, 0.92 m up (UE's start: the capsule's centre), the CTs facing south, the Ts north; `PlayerStartTag` `CT` / `T` |
-| `NavWaypoint_*` (22: `TSpawn`, `TMid`, `TPlazaA` / `B`, `LongAGate`, `TunnelB`, `Mid`, `ShortA` / `B`, `LongA` / `B`, `ALongEnd` / `BLongEnd`, `MidDoors`, `CTMid`, `AConnector` / `BConnector`, `SiteA` / `B`, `CTSpawn`, `CTA` / `CTB`) | navigation waypoints, each linked both ways by its `links` custom property, plus the 38 links the import adds (above) |
+| `BombSite_A` / `_B` (14 × 10 × 3 m), `BuyZone_CT` (7.5 × 16 m) / `_T` (7 × 16 m) | trigger volumes tagged [`BombSite`, `A`], [`BuyZone`, `CT`], ... (ShooterGame's rules) |
+| `Ladder_A`, `Ladder_B` | trigger volumes tagged `Ladder` (N30c): 20 cm boxes against the north blocks' long faces, from the floor to their roofs (3.5 m); the bots climb them (ps2-polish P3: a waypoint flagged `Ladder` at each one's foot and top) |
+| `PlayerStart_CT` … `.004`, `PlayerStart_T` … `.004` | ten player starts, 2 m apart or more, 0.92 m up (UE's start: the capsule's centre), the CTs facing south, the Ts north; `PlayerStartTag` `CT` / `T`. The CT starts stand 6 to 7 m to either side of the middle (ps2-polish P3: in the line of the mid doors and the arch the terrorists' spawn saw them across the map), A's side and B's in turn |
+| `NavWaypoint_*` (34: `TSpawn`, `TMid`, `TPlazaA` / `B`, `LongAGate`, `TunnelB`, `Mid`, `ShortA` / `B`, `LongA` / `B`, `ALongEnd` / `BLongEnd`, `MidDoors`, `CTMid`, `AConnector` / `BConnector`, `SiteA` / `B`, `CTSpawn`, `CTA` / `CTB`; ps2-polish P3's `LookoutA1` … `B3`, flagged `Lookout`, three a site off the lanes' line, `LadderAFoot` / `BFoot` and, on the roofs, `LadderATop` / `BTop` (flagged `Ladder`) and `RoofA` / `B`) | navigation waypoints, each linked both ways by its `links` custom property and flagged by its `flags` one, plus the 66 links the import adds (above; the ladders' feet to their tops among them) |
 | `Sun`, `Light_Tunnel_01` / `_02`, `Light_MidDoors_01` | the directional light (warm, high in the north-west) and three warm point lights (7 and 6 m), baked into the static meshes with the sky |
 | `VIS_<Cell>` (7), `PORTAL_<CellA>_<CellB>` (24) | [cells and portals](#cells-and-portals) (box meshes up to 6 m, quads; `.001` copies for a second quad between two cells): the doorways and lanes, and the sky over the walls between two cells from 3.5 m up. The walls are low, so a view across the map keeps most cells; facing a wall only its own |
 

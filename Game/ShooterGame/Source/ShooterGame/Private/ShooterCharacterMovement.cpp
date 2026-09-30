@@ -16,7 +16,7 @@ namespace
 	 * The face of a ladder (a thin box against its wall, CS's func_ladder): the box's thinner horizontal axis, pointing
 	 * from its middle to the side the climber at Feet is on.
 	 */
-	FVector GetLadderNormal(const ATriggerVolume& Ladder, const FVector& Feet)
+	FVector GetLadderFaceNormal(const ATriggerVolume& Ladder, const FVector& Feet)
 	{
 		const FBox Box = Ladder.GetBrushBounds();
 		const FVector Extent = Box.GetExtent();
@@ -131,6 +131,14 @@ bool UShooterCharacterMovement::IsOnLadder() const
 		Owner->GetCustomMovementMode() == static_cast<uint8>(EShooterCustomMovementMode::Ladder);
 }
 
+FVector UShooterCharacterMovement::GetLadderNormal() const
+{
+	const ACharacter* Owner = GetCharacterOwner();
+	return CurrentLadder != nullptr && Owner != nullptr && IsOnLadder()
+		? GetLadderFaceNormal(*CurrentLadder, Owner->GetActorLocation())
+		: FVector::ZeroVector;
+}
+
 void UShooterCharacterMovement::JumpOffLadder()
 {
 	if (IsOnLadder())
@@ -174,8 +182,7 @@ void UShooterCharacterMovement::UpdateCharacterStateBeforeMovement(FPhysScene& P
 	{
 		return;
 	}
-	// A bot looks for no ladder at all (it walks through them).
-	ATriggerVolume* Ladder = bCanClimbLadders ? FindTouchedLadder() : nullptr;
+	ATriggerVolume* Ladder = FindTouchedLadder();
 	if (Ladder == nullptr)
 	{
 		bJumpedOffLadder = false;
@@ -218,7 +225,7 @@ void UShooterCharacterMovement::PhysLadder(FPhysScene& PhysScene, float DeltaTim
 		Owner->SetMovementMode(EMovementMode::Falling);
 		return;
 	}
-	const FVector Normal = GetLadderNormal(*CurrentLadder, Owner->GetActorLocation());
+	const FVector Normal = GetLadderFaceNormal(*CurrentLadder, Owner->GetActorLocation());
 	if (bWantsToJumpOffLadder)
 	{
 		// CS: the jump pushes the climber straight off the ladder's face; gravity takes it from the next move on.

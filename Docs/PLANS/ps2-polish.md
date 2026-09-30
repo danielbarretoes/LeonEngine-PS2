@@ -101,7 +101,7 @@ Añadido (P2b, tras la revisión, por fidelidad a CS):
 - Desviación: la MP5 de CS no tiene término de carrera en el spread (solo el aire); aquí correr sigue abriéndolo
   (`MovingSpread` 1,5), como pide el plan.
 
-**P3 · IA de bots: cuchillo, sin rumbo, recoger armas, escaleras, balance (M)**
+**P3 · IA de bots: cuchillo, sin rumbo, recoger armas, escaleras, balance (M) — hecha**
 - Cuchillo: `TaskEngage` (`ShooterAIController.cpp:581`) llama `StandStill()` y solo hace strafe. Con arma cuerpo a
   cuerpo el bot corre hacia el enemigo (MoveToLocation al enemigo, re-path) y ataca solo dentro del alcance
   (`ShooterWeapon_Knife.h`: 122/81 cm); en combate `EquipBestWeapon` para bots salta las granadas.
@@ -116,6 +116,55 @@ Añadido (P2b, tras la revisión, por fidelidad a CS):
 - Balance: volver a medir T vs CT en 24 semillas y ajustar hasta 45–55 %.
 - Tests: cuchillo se acerca y mata; bot sin munición recoge un arma; bot sin enemigo visita puntos de vigilancia;
   bot sube una escalera; BotMatch estable.
+
+Estado: con el cuchillo (`EngageWithKnife`) el bot corre la ruta hasta el enemigo (`MoveToGoal`, nueva ruta cuando se
+mueve 1,5 m), dentro del alcance del tajo entra recto por la espalda si el enemigo le da la espalda y apuñala dentro
+del alcance de la puñalada (`IsBackstab`), si no lo rodea de lado acercándose y da tajos; nunca corta fuera de
+alcance. En combate `EquipBestWeapon(false)` salta las granadas (también ciego, al comprar y tras lanzar). Recoger: la
+rama nueva `PickUp` (`UpdatePickupTarget`, dos veces por segundo) lleva a un bot sin primaria cargada a la primaria
+con munición más cercana del suelo en 15 m (`PickupSearchDistance`) y, sin munición en nada, a cualquier arma con
+munición en 30 m; `AShooterWeapon::CanBePickedUpBy` deja a un bot coger un arma para un hueco cuya arma no tiene
+munición (`PickUpWeapon`/`AddWeapon` suelta la gastada); el jugador sigue la regla de CS (hueco libre). Sin enemigo:
+`HoldAndLookAround` se borra; los bots vigilan los sitios desde sus puntos de vigilancia
+(`AShooterGameMode::GetBombSiteLookouts`: waypoints con flag `Lookout`, tres por sitio en de_leon; sin ellos, los tres
+waypoints más cercanos al sitio o su centro), cada uno con direcciones por equipo: primero el acceso principal (el
+primer enlace del camino del grafo hacia el spawn contrario), luego las otras; en cada punto giran entre ellas (el
+acceso principal el doble de tiempo) y a los 3–7 s pasan a otro punto del sitio; al acercarse miran ya el acceso. Los
+T sin bomba escoltan al portador mirando a un lado y, con él a 15 m del sitio, toman los puntos del sitio (apoyo); con
+la bomba plantada la guardan desde los puntos de su sitio. Los CT rotan tras `RotateTime` sin contacto o al oír por
+radio un enemigo en el otro sitio (`RotateOnReportChance` 1); los T cazan con 30 s o menos de ronda; la caza recorre waypoints del grafo
+tras el spawn enemigo. Andando sin enemigo el bot mira por donde va. Escaleras: `AutoLinkWaypoints` enlaza dos
+waypoints con flag `Ladder` a menos de 2 m en horizontal (`MaxLadderLinkDistance`) sea cual sea la subida, el
+seguidor de rutas no salta a la cima de una escalera y cuenta la subida como avance, `AAIController` expone
+`GetCurrentTargetLocation` (UE), el bot trepa mirando a la escalera (`GetLadderNormal`), baja mirando abajo y se suelta
+abajo con un salto; se borra `bCanClimbLadders`. de_leon (`make_de_leon.py`, arte determinista): seis puntos de
+vigilancia fuera de la línea de las calles largas, pies y cimas de las dos escaleras y un punto en cada tejado, y los
+inicios CT fuera de la línea de las puertas de mid (zona de compra CT 7,5 × 16 m). Balance en las semillas 1–24: los T
+ganaban el 60,1 % de las rondas (125 de 208, en P2b; 61,3 % en P0) y ahora el 49,3 % (99 de 201; 1–48: 50,2 %,
+49–88: 59,5 %). Motor: `USceneComponent::DetachAllChildren` ya no da vueltas para siempre con un hijo que apunta a otro
+padre (la recolección de la salida colgaba un BotMatch). Tests nuevos:
+`ShooterGame.Bots.KnifeRushesAndKills`, `.PicksUpAWeaponOutOfAmmo`, `.VisitsLookouts` (con la misma semilla, el mismo
+recorrido), `.ClimbsALadder` y `System.AIModule.Gameplay.NavigationAutoLinkLadders`; ampliados
+`ShooterGame.Map.DeLeonHoldsTheGame`, `.Movement.Ladder` y `System.Engine.Components.AttachmentRulesAndSockets`, y
+`Radio.BotsReportEvents` pone un muro delante del compañero (los bots ya miran por donde van) (109 tests de
+ShooterGame).
+BotMatch 10 7: `Botmatch OK: 8 round(s), CT 2 - T 6, 55 kill(s), seed 7, sides switched after round 5`.
+MeasurePS2 (fila «ps2-polish P3» de Budgets.md): 29,26 fps, p50/p95 33,5 ms, mundo 4,71 ms (P5: 4,57 ms); el p99 de
+83,5 ms son 12 cuadros de los segundos 12 a 15, con un compañero a 80 cm delante del bot observado: sus lotes con piel
+pasan por el emisor del EE (el recorte de PENDING), no por la IA.
+
+Desviaciones: los puntos de vigilancia son waypoints con flag `Lookout` (sin nodos `Ambush` aparte) y sus direcciones
+se sacan del grafo, no se escriben a mano. El balance no se logró solo con la IA: con la vista de 60 m los T ganaban
+el 73–78 % porque (1) los inicios CT estaban en la línea de las puertas de mid y el arco (el 45 % de las muertes eran
+de spawn a spawn a 53 m), y (2) desde la plaza T se ve por las puertas de las calles largas hasta dentro de los dos
+sitios (35–45 m), duelos que gana el AK-47. Se movieron los inicios CT (mapa) y la vista de los bots pasa a ser
+configurable (`SightRadius`) con 35 m; con 40 m los T ganan el 70 %. La radio hace rotar siempre a los CT. Los bots
+solo oyen disparos (no pasos); ninguna bomba explota en las 24 semillas (los CT recuperan o los T mueren), y las
+semillas 49–88 siguen del lado T (59,5 %). Un BotMatch (semilla 35, antes de P2b) colgaba al salir: un hijo con otro
+padre en la lista de `AttachChildren` (la recolección borra el puntero del hijo) hacía girar `DetachAllChildren`; se
+arregla en el motor. Los tejados
+con escalera no son puntos de vigilancia (desde ellos no se ve el acceso); los bots suben por la caza, que elige
+waypoints al azar.
 
 ### Juego y controles
 

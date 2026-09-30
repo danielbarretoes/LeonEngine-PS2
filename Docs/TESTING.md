@@ -9,7 +9,7 @@ What runs automatically and what a person still has to check by hand. Build and 
 | --- | --- | --- |
 | Every local gate ([ps2-shipping](PLANS/ps2-shipping.md) N1; the repository has no CI) | `Engine\Build\BatchFiles\RunGates.bat [-PS2] [-Measure]` | `RunGates OK`: Lint (G1, G4, /W4), RunTests, CheckReimport (G5, the engine and ShooterGame content), SmokeTest (G6), BotMatch (`10 7`, played twice) and ValidateAssets (engine and ShooterGame) each print `[ OK ]` (logs in `Engine\Saved\Gates\`); `-PS2` adds `Package.bat -NoWin64` (G3), `-Measure` `MeasurePS2.bat` (below) |
 | The PS2 frame in PCSX2 ([ps2-shipping](PLANS/ps2-shipping.md) N1, N9) | `Engine\Build\BatchFiles\MeasurePS2.bat [-Project Game\ShooterGame] [-Rounds 2] [-Seed 7] [-Seconds 120] [-NoBuild] [-TimeoutSeconds 900] [-Label <text>] [-Iso] [-PakOrder <order file>] [-LogFileOpenOrder] [-ExtraArgs <game arguments>]` (Docker and PCSX2, unattended; `-ExtraArgs -novu1` measures the EE's C++ emitter; the disc switches are [below](#ps2-disc-boot)) | `MeasurePS2 OK`: PCSX2 runs the staged ShooterGame without its window, from `Game\ShooterGame\Saved\PCSX2` (the user's `PCSX2.ini` with `Engine\Platforms\PS2\Build\PCSX2\Measure.ini` on top), a bot match watched through a bot's eyes (`-BotMatchSpectate -LogFrameTimes -ExitAfterSeconds`) until the game's `FrameStats Summary:` and `ProfileSummary:` lines (the cycle stats' top level scopes, N9); the figures go to `Saved\Profiling\PS2Frame.csv` (the `ProfileSummary:` pairs as `Profile_<key>` columns), and a [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) row and the last `Profile over N frames (ms, calls):` block (the frame's scopes as a hierarchy) are printed. Three runs agree within 3 % |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`, 575 at 0.24.0, 588 at [ps2-polish](PLANS/ps2-polish.md) P5; `-nodisplay` skips the `NonNullRHI` tests, which need an OpenGL window) and ShooterGame's (`ShooterGameTests`, 105), between them `LeonHeaderTool -Test: 35 of 35 golden cases passed`, then `TestPAL: PASSED (171 test(s), 0 failed)` (TestPAL on Win64) |
+| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`, 575 at 0.24.0, 588 at [ps2-polish](PLANS/ps2-polish.md) P5, 589 at P3; `-nodisplay` skips the `NonNullRHI` tests, which need an OpenGL window) and ShooterGame's (`ShooterGameTests`, 109), between them `LeonHeaderTool -Test: 35 of 35 golden cases passed`, then `TestPAL: PASSED (171 test(s), 0 failed)` (TestPAL on Win64) |
 | GS emulator conformance ([ps2-gs-parity](PLANS/ps2-gs-parity.md) P4, [ps2-engine](PLANS/ps2-engine.md) E2, [ps2-shipping](PLANS/ps2-shipping.md) N8) | `LeonAutomationTests -automation=GSEmulator` (it needs an OpenGL window) | `System.Renderer.GSEmulator.Conformance`: the OpenGL GS emulator draws the 21 GS conformance scenes within 2 levels per channel of the reference rasterizer, but for at most 8 pixels a scene (today 3 in StripsAndSprites, pixel centres on a shallow side, and 3 in MipmapLod, a minified bilinear weight); `System.Renderer.GSEmulator.SceneFrame`: a frame of the GS scene renderer (textured, flat and translucent meshes, two lights, a floor through the near plane; the texture as the PS2 cook makes it, PSMT8 with its mips, trilinear, since ps2-shipping N13) within one 5-bit step of the reference, but for at most 64 pixels |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: 35 of 35 golden cases passed` |
 | Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (N test(s), 0 failed)` in the EE log: 157 at [ps2-shipping](PLANS/ps2-shipping.md) N15, against 164 on Win64 then (the platform-file, config-cache, log-file, SaveConfig and package-file tests are desktop-only); not run again on the EE since N24's tests (171 on Win64 at 0.24.0). N15's `System.Core.Math.VectorMathVU0` compares VU0 with the scalar reference there: at most 2 units in the last place of the products' magnitudes |
@@ -165,8 +165,8 @@ projection, the primitives of a 5v5 frame, no allocation) and `.DamageIndicator`
 N30c's CS movement is `ShooterGame.Movement.*` (`ShooterMovementTests.cpp`, at the fixed 30 Hz step): `FallDamage`
 (the thresholds with N30e's multiplayer 1.25, lethal at 935 u/s, and drops of 3, 9 and 16 m: unhurt, hurt by the
 landing speed's damage without armor or tagging, dead by the world in the kill feed), `Ladder` (grabbing a tagged volume, climbing at 508 cm/s and faster looking up, hanging
-without gravity, climbing down looking down, the jump off at 686 cm/s, climbing over the top onto the roof, a bot
-walking through it), `JumpStamina` (the ratio, the landing's speed step by step against the formula, full speed again
+without gravity, climbing down looking down, the jump off at 686 cm/s, climbing over the top onto the roof, the face
+toward the climber), `JumpStamina` (the ratio, the landing's speed step by step against the formula, full speed again
 when the stamina runs out), `Tagging` (half the speed at a shot, three quarters half a second later, recovered after a
 second; the world's damage does not tag) and `Footsteps` (the locomotion's notifies heard by an enemy bot while
 running, silent walking, crouching and standing). N30a's CS arsenal (`ShooterArsenalTests.cpp`):
@@ -205,14 +205,18 @@ imports a map with the auto-linking; `System.AIModule.Blackboard.TypedKeys` and 
 in a cone behind a line of sight, hearing within the loudness' range) test the AI's pieces. ShooterGame's
 `ShooterGame.Bots.*` (10, `ShooterBotTests.cpp`) test the bots on a small open map (buying, engaging with the reaction
 time respected, the carrier planting, a CT defusing, the terrorists escorting the carrier, an outnumbering team hunting,
-a CT rotating between the sites), the agent read from the config (`AgentFromConfig`), and play three rounds of de_leon
+a CT rotating between the sites; [ps2-polish](PLANS/ps2-polish.md) P3's four in `ShooterBotBehaviorTests.cpp`: the
+knife's rush and stab in the back, a spent pistol swapped for one on the floor, the lookouts watched and walked the same
+way with the same seed, a ladder climbed up and down), the agent read from the config (`AgentFromConfig`), and play three rounds of de_leon
 headless with ten bots and `?seed=5` under `FShooterMatchChecker` (each round ends with a reason, the scores add up, the
 money stays within [0, 16000], no pawn falls through the floor) and kills happen; `MatchCheckerFlagsViolations` shows
 the checker catches a score the rules did not give. The bot match (P21, `BotMatch.bat`) runs the same checker over ten
 rounds and plays them twice: a seed must replay the same match, which caught a read of a freed path in `AAIController`'s
 repath (the bots then diverged between runs; valgrind reports no error since the fix).
 `System.AIModule.Gameplay.AIControllerPathFollowReadsWaypointFlags` checks that a controller jumps at a `Jump` waypoint
-and crouches along a `Crouch` one. The round and weapon tests keep the bots still (`bot_stop`, or a controller that does
+and crouches along a `Crouch` one; `System.AIModule.Gameplay.NavigationAutoLinkLadders` (ps2-polish P3) that a
+ladder's foot and top flagged `Ladder` are linked both ways across the climb, a path to the roof goes up it and the
+follower does not jump at it. The round and weapon tests keep the bots still (`bot_stop`, or a controller that does
 not tick) so they test the rules alone.
 
 The golden tests (`System.Engine.Golden.*`) replay movement, traces, cameras, shadows

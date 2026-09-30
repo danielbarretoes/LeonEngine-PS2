@@ -169,8 +169,8 @@ ps2-shipping N30c, on top of UE's velocity model (`UShooterCharacterMovement`, `
   degrees, as in CS, 1.4 times faster), looking straight down it climbs down, and backing off it on the floor steps
   away; without a key the character hangs there. Jump pushes it off the ladder at 686 cm/s and it falls; it grabs a
   ladder again only once it touches none. Climbing on past the top carries it up onto the ledge. On a ladder the
-  weapons have their air spread (CS: off the floor). The bots do not climb: their pawns walk through ladders
-  (`bCanClimbLadders`).
+  weapons have their air spread (CS: off the floor). The bots climb too ([Bots](#bots)): they face the ladder
+  (`UShooterCharacterMovement::GetLadderNormal`) and look up or down.
 - **The jump's stamina** (CS's `fuser2`): a jump costs `JumpStaminaTime` (1.3158 s), which runs down with the time. On
   the floor, each 10 ms (a CS command) of a step scales the horizontal velocity by `1 - stamina x 0.19` (CS: `(100 -
   fuser2 x 0.001 x 19) / 100`; a step of `dt` by that to the power `dt / 10 ms`, the same at any step): 0.75 at the
@@ -501,14 +501,15 @@ most urgent first:
 | Idle | frozen, dead or `bot_stop` | stands; in the freeze it buys once (below) and sees nobody, so its reaction starts with the round |
 | Blind | flashed (`AShooterCharacter::IsBlind`) | stands and fires at random (CS's bots): every `BlindFireMinTime` to `BlindFireMaxTime` (0.25 to 0.6 s) a new point within `BlindFireError` (25 degrees across, a quarter of it up and down) of where it last saw an enemy (else of its view), fired at with `BlindFireChance` (0.6), all from its stream |
 | ThrowGrenade | a throw under way (below) | draws the grenade, turns to the throw and throws it (an enemy that shows up meanwhile waits); after a flashbang it turns its back to it until it goes off, unless an enemy is in sight |
-| Engage | an enemy in sight (seen in the last three sensing updates; one lost for `EnemyMemory` s is searched for where it was last seen, as a noise) | draws its best weapon with ammunition, turns at `AimTurnRate`, fires once `ReactionTime` has passed since it came into sight; the aim error starts at `AimError` and settles toward `MinAimError`; automatic weapons fire bursts, the AWP zooms first; the recoil climbs on its aim as on a player's, `RecoilCompensation` of each kick pulled back down. It moves as CS's bots do (below): it strafes, crouches with a rifle at range, stands with the AWP |
+| Engage | an enemy in sight (seen in the last three sensing updates, within `SightRadius`; one lost for `EnemyMemory` s is searched for where it was last seen, as a noise) | draws its best weapon with ammunition, never a grenade (`EquipBestWeapon(false)`: the throws are ThrowGrenade's), turns at `AimTurnRate`, fires once `ReactionTime` has passed since it came into sight; the aim error starts at `AimError` and settles toward `MinAimError`; automatic weapons fire bursts, the AWP zooms first; the recoil climbs on its aim as on a player's, `RecoilCompensation` of each kick pulled back down. It moves as CS's bots do (below): it strafes, crouches with a rifle at range, stands with the AWP, and rushes with the knife |
 | Defuse | a CT and the bomb planted | walks to the bomb and holds use |
 | Plant | the bomb's carrier | walks to the round's site (`AShooterGameMode::GetTerroristTargetSite`, drawn each round from the seeded stream) and plants inside it |
 | FetchBomb | a T and the bomb dropped | walks over it |
-| Escort | a T without the bomb while a live teammate carries it | stays within `EscortDistance` (350 cm) of the carrier |
+| PickUp | a weapon on the floor worth the walk (below) | walks over it: its spent weapon is dropped for it |
+| Escort | a T without the bomb while a live teammate carries it, still `SupportDistance` (15 m) or farther from the site | stays within `EscortDistance` (350 cm) of the carrier, watching one side of its way (`EscortWatchAngle`, 50 degrees: the even bots its right, the odd its left) |
 | Investigate | an enemy's shot heard (`AActor::MakeNoise`), or a teammate's report on the radio | walks to where it came from; nobody there: "Sector clear." |
-| Hunt | its team's living players outnumber the enemy's by `HuntAdvantage` (2; 0 never hunts) and no bomb is planted | walks to the enemy's first spawn (`AShooterGameMode::GetTeamSpawnLocation`) until contact |
-| Objective | otherwise | T: to the round's site (guarding the planted bomb); CT: A for the even, B for the odd of the team, and a CT that has held its site `RotateTime` (25 s) with no contact rotates to the next site |
+| Hunt | its team's living players outnumber the enemy's by `HuntAdvantage` (2; 0 never), or a T with `HuntTimeLeft` (30 s) of the round left (0 never), and no bomb is planted | walks to the enemy's first spawn (`AShooterGameMode::GetTeamSpawnLocation`), then to waypoints of the graph drawn from its stream, until contact |
+| Objective | otherwise | the site's lookouts (below): T the round's site (its support spots once the carrier is near, the planted bomb's site to guard it); CT A for the even, B for the odd of the team, a CT that has held its site `RotateTime` (25 s) with no contact rotating to the next site |
 
 - **The economy** (ps2-shipping N30e, CS's): when a round starts each team decides its plan once
   (`AShooterGameMode::GetTeamBuyPlan`, `ChooseBuyPlan`): the first round of each half is the **pistol** round; a team
@@ -534,8 +535,39 @@ most urgent first:
   walk key's speed (`bStrafeWalking`), each way for `StrafeMinTime` to `StrafeMaxTime` (0.4 to 1 s, from its stream);
   with a rifle (the AK-47, the M4A1) and the enemy at `CrouchFireDistance` (15 m) or farther it crouches and stops;
   with the AWP it stands still.
+- **The knife** (ps2-polish P3, CS's bots' rush; `EngageWithKnife`): with the knife drawn (nothing else has
+  ammunition) a bot runs the path to its enemy (a new one as the enemy moves 1.5 m), and within the slash's reach
+  (`AShooterWeapon_Knife::SlashRange`, 122 cm to the enemy's capsule, less 10) it goes straight in behind an enemy
+  whose back is turned and stabs within the stab's reach (81 cm; `IsBackstab`: three times as hard), else circles it
+  by the side, closing in, and slashes. It never cuts out of reach.
+- **Weapons on the floor** (ps2-polish P3; `UpdatePickupTarget`, twice a second): a bot without a loaded primary goes
+  for the nearest primary with ammunition on the floor (`AShooterGameMode::GetPickups`) within `PickupSearchDistance`
+  (15 m); out of ammunition altogether (the knife left), for any weapon with ammunition within twice that. Walking
+  over it swaps its spent weapon for it: `AShooterWeapon::CanBePickedUpBy` lets a bot take a weapon into a slot whose
+  weapon has no ammunition left (`AShooterCharacter::PickUpWeapon`, `AddWeapon` dropping the spent one); a player's
+  slot must be free, as CS's walk-over. A walk longer than 12 s gives that weapon up for the round.
+- **No enemy in sight** (ps2-polish P3): the bots watch the sites from their **lookouts**
+  (`AShooterGameMode::GetBombSiteLookouts`): the map's waypoints flagged `Lookout` (de_leon's three a site, off the
+  lanes' line: behind the crates, in the corners by the houses, by the site walls), each given to its nearest site; a
+  map without them uses the site's three nearest waypoints within `LookoutFallbackRadius` (15 m), else its middle.
+  Each lookout has a team's directions (`FShooterLookout::GetWatchYaws`): first the main way in (the first link of the
+  graph's path toward the other team's spawn: CS's approach areas), then over the site from a spot away from it and
+  its other links toward that spawn, at most four, 35 degrees apart. At a lookout a bot turns between them at
+  `LookTurnRate` (240 degrees a second), the main way in for twice a drawn `WatchMinTime` to `WatchMaxTime` (1 to 2.5
+  s) between each of the others, and after `LookoutMinTime` to `LookoutMaxTime` (3 to 7 s) it moves to another of the
+  site's lookouts, drawn from its stream; within 10 m of the next one it already watches its main way in. The team's
+  bots start at different lookouts (their place in the team). A CT holding a site that hears a teammate's "Enemy
+  spotted." within `SiteReportRadius` (15 m) of the other site rotates there with `RotateOnReportChance` (1). On the
+  move with nobody to aim at, a bot looks along its path (`LookTurnRate`).
+- **Ladders** (ps2-polish P3): the waypoint graph links a ladder's foot and top (both flagged `Ladder`; the map
+  import's `AutoLinkWaypoints` links two within `MaxLadderLinkDistance`, 2 m across, however high the climb), and the
+  path follower does not jump at a ladder's top. On a ladder a bot faces its face (`GetLadderNormal`) and climbs to
+  the path's point at the top looking level, climbs down to one below looking down (85 degrees), and at the foot jumps
+  off it (a jump on a ladder pushes off its face); standing on one with nothing to climb it lets go, unless it
+  fights.
 - **Senses**: `UShooterPawnSensingComponent`, UE's `UPawnSensingComponent` narrowed to what a bot acts on: sight in a
-  cone with a line of sight on the Visibility channel, hearing of the noises `AActor::MakeNoise` reports within a
+  cone (140 degrees) within `SightRadius` (35 m; ps2-polish P3: at 60 m de_leon's lanes gave the terrorists' plaza the
+  duels into both sites, the terrorists winning three rounds in four) with a line of sight on the Visibility channel, hearing of the noises `AActor::MakeNoise` reports within a
   loudness-scaled range (a weapon's shot: `FireNoiseLoudness`; a noise reaches the registered sensing components, not
   every actor). Its `ShouldCheckVisibilityOf` lets through only the living shooters of the other team, while the bot's
   own pawn is alive and not frozen, and `ShouldCheckAudibilityOf` only the other team's noises: the pawns and noises
@@ -551,11 +583,12 @@ most urgent first:
   bot's looks within the 0.1 s moved.
 - **Navigation**: `AAIController::MoveToLocation` on `UNavigationSystem`'s waypoint graph (A* over de_leon's waypoints,
   linked at import); a bot jumps when the next path point rises more than 50 cm within 1.5 m or is a waypoint flagged
-  `Jump`, crouches along the links on both sides of a waypoint flagged `Crouch` and stands up past them, and repaths
-  when it moves less than 30 cm in 1.5 s.
+  `Jump` (not at a ladder's top, which it climbs), crouches along the links on both sides of a waypoint flagged
+  `Crouch` and stands up past them, and repaths when it moves less than 30 cm in 1.5 s (climbing counts).
 - **Skill** (`[/Script/ShooterGame.ShooterAIController]`): `Difficulty` scales the reaction and the aim error down and
   the turn rate and the recoil control (`RecoilCompensation`, 0.5: half of each kick pulled down; 0 lets it climb, 1
-  holds the spray flat) up; `EscortDistance`, `HuntAdvantage` and `RotateTime` tune the branches above. Every random
+  holds the spray flat) up; `EscortDistance`, `SupportDistance`, `HuntAdvantage`, `HuntTimeLeft`, `RotateTime`,
+  `RotateOnReportChance`, the lookouts' and the watch's times and `PickupSearchDistance` tune the branches above. Every random
   choice comes from the bot's stream, seeded from the game mode's `RandomSeed` and the bot's index, the order the game
   mode created it in (`SetBotIndex`): a match with `?seed=N` replays.
 - **Names** (N30e): CS 1.6's BotProfile names (`[/Script/ShooterGame.ShooterGameMode]` `+BotNames=`: Albert, Allen,
@@ -573,7 +606,14 @@ back to the flash; a teammate's report thrown at with the HE, the same point wit
 with a rifle at 16 m; upright and still with the AWP), `EngageKillsAnEnemy` (no shot before the reaction time),
 `RecoilKicksTheAim`,
 `CarrierPlants`, `CTDefuses`,
-`TerroristsEscortTheCarrier`, `OutnumberingTeamHunts`, `CTRotatesBetweenSites`, `AgentFromConfig`,
+`TerroristsEscortTheCarrier`, `OutnumberingTeamHunts`, `CTRotatesBetweenSites`, `AgentFromConfig`, ps2-polish P3's
+`KnifeRushesAndKills` (a bot with the knife, and a flashbang it never draws, runs at a terrorist 8 m away with its back
+turned, cuts nothing out of reach and kills it with a stab in the back), `PicksUpAWeaponOutOfAmmo` (a spent pistol
+swapped for a loaded Glock on the floor 8 m away, dropped for it; not for a pawn that is not a bot's),
+`VisitsLookouts` (three lookouts around a site, each team's first direction toward the other's spawn; a CT walks
+between them and turns between their directions; the same walk with the same seed) and `ClimbsALadder` (a site on the
+roof of a 4 m block: up the ladder facing it, onto the roof, down it looking down to the lookout at its foot, off
+it),
 `MatchCheckerFlagsViolations`, `MatchOnDeLeon` (ten bots, three rounds of a four-round match, across its halftime,
 seed 5, under `FShooterMatchChecker`; kills happen), `SensingFilter` (no trace to a teammate, a corpse or the spectator; one to a living enemy) and
 `SensingStagger` (ten bots at 60 and 30 fps: at most two looks a frame, each bot as often as the others, 10 Hz at 60
@@ -601,7 +641,9 @@ the sender in the team's colour.
   when they plant; "Fire in the hole!" with every throw (anybody's). A bot does not say what a teammate said in the
   last `RadioRepeatTime` (3 s).
 - **What they do with it**: a teammate's "Enemy spotted." within `RadioReportRange` (30 m) is a place to look at, as
-  a heard shot, for a bot that fights nobody, has nothing else to look at and holds no site; the living bot nearest the
+  a heard shot, for a bot that fights nobody, has nothing else to look at and holds no site; a CT holding a site
+  rotates to the other site when the report is within `SiteReportRadius` of it, with `RotateOnReportChance`
+  (ps2-polish P3); the living bot nearest the
   sender answers a request (radio1's, radio2's and "Need backup.") with "Affirmative." ("Reporting in." to "Report
   in, team.") and goes to the sender for "Need backup." and "Taking fire".
 - **Its sounds** (N30f; `AShooterPlayerController::HearRadio`): the team's local players hear a message's sound, 2D:
@@ -710,6 +752,9 @@ when nothing changed; a score formats one line, a kill three).
   63 kill(s), seed 7, sides switched after round 5` (P2: `CT 4 - T 6, 59 kill(s)`). At 0.24.0 (since ps2-shipping N29, the floor slabs as the ground) it logged
   `9 round(s), CT 3 - T 6, 55 kill(s)`: a team reached the majority after nine rounds (N28's de_leon on one ground box: `10 round(s), CT 5 - T 5, 65 kill(s)`, the terrorists winning every
   round; over seeds 1 to 24 then, the terrorists won 61 % of the rounds with 6.1 kills a round).
+  ps2-polish P3's bots (the knife, the lookouts, the ladders, the pickups) and de_leon's CT starts out of the mid
+  doors' line log `Botmatch OK: 8 round(s), CT 2 - T 6, 55 kill(s), seed 7, sides switched after round 5`; over seeds
+  1 to 24 the terrorists win 49 % of the rounds (60 % after P2b, before P3) with 7.1 kills a round.
 
 ## de_leon
 
@@ -721,7 +766,7 @@ ladders to two roofs, `a` / `b` the bomb sites, `+` / `t` the team starts; 1 cha
 ```text
        W (-Y)                   Y=0                  E (+Y)
   30 ##################################################
-  26 #######bbbbbb        + + + + +       aaaaaa#######
+  26 #######bbbbbb     ++           ++    aaaaaa#######
   22 #  bcccbbbbbb                        aaaaaaaaaa  #
   18 #  bbbbbbbbbb  ##                ##  aaccaaaaaa  #   <- the site walls
   14 #  =====bbbbb  ##          C     ##  aaaaaaaaaa  #

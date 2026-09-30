@@ -1,5 +1,6 @@
 #include "ShooterGameMode.h"
 
+#include "AI/Navigation/NavigationSystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/Level.h"
@@ -39,6 +40,17 @@ namespace
 
 	/** How high above the feet a pawn is tested against a zone (the volumes stand on the floor), cm. */
 	constexpr float ZoneTestHeight = 50.0f;
+
+	/**
+	 * The bots' lookouts (GetBombSiteLookouts): the waypoints' flag; how far apart the directions one watches are
+	 * (degrees) and how many; how far from its site one watches over it first (cm); how many waypoints stand in for
+	 * them on a map without.
+	 */
+	const FName LookoutFlag(TEXT("Lookout"));
+	constexpr float LookoutWatchSpacing = 35.0f;
+	constexpr int32 MaxLookoutWatchYaws = 4;
+	constexpr float LookoutOverSiteDistance = 800.0f;
+	constexpr int32 MaxFallbackLookouts = 3;
 
 	/** The half height of a start's capsule: its location is the capsule's centre (UE). */
 	float GetStartHalfHeight(const AActor& StartSpot)
@@ -509,6 +521,7 @@ void AShooterGameMode::UpdateMapCaches() const
 		return;
 	}
 	bMapCachesDirty = false;
+	bLookoutsDirty = true;
 	// The sites by name ("A", "B"), compared as text once here (not in every bot's frame).
 	struct FSite
 	{
@@ -711,6 +724,177 @@ bool AShooterGameMode::GetTeamSpawnLocation(EShooterTeam Team, FVector& OutLocat
 	}
 	OutLocation = Starts[0]->GetActorLocation();
 	return true;
+}
+
+const TArray<FShooterLookout>& AShooterGameMode::GetBombSiteLookouts(FName Site) const
+{
+	UpdateMapCaches();
+	const UWorld* World = GetWorld();
+	const int32 NumNodes = World != nullptr ? World->GetNavigationSystem().GetNodes().Num() : 0;
+	if (bLookoutsDirty || NumNodes != LookoutsNodeCount)
+	{
+		BuildBombSiteLookouts();
+	}
+	static const TArray<FShooterLookout> NoLookouts;
+	const int32 Index = BombSiteNames.IndexOfByKey(Site);
+	return BombSiteLookouts.IsValidIndex(Index) ? BombSiteLookouts[Index] : NoLookouts;
+}
+
+void AShooterGameMode::BuildBombSiteLookouts() const
+{
+	bLookoutsDirty = false;
+	BombSiteLookouts.Reset();
+	BombSiteLookouts.SetNum(BombSiteNames.Num());
+	const UWorld* World = GetWorld();
+	const TArray<UNavigationSystem::FNode> NoNodes;
+	const TArray<UNavigationSystem::FNode>& Nodes =
+		World != nullptr ? World->GetNavigationSystem().GetNodes() : NoNodes;
+	LookoutsNodeCount = Nodes.Num();
+	if (BombSiteNames.Num() == 0)
+	{
+		return;
+	}
+	auto AddYaw = [](TArray<float, TInlineAllocator<4>>& Yaws, float Yaw)
+	{
+		for (const float Watched : Yaws)
+		{
+			if (FMath::Abs(FRotator::NormalizeAxis(Yaw - Watched)) < LookoutWatchSpacing)
+			{
+				return;
+			}
+		}
+		if (Yaws.Num() < MaxLookoutWatchYaws)
+		{
+			Yaws.Add(FRotator::NormalizeAxis(Yaw));
+		}
+	};
+	auto YawTo = [](const FVector& From, const FVector& To) { return (To - From).Rotation().Yaw; };
+	// Each team's watcher looks toward the other team's spawn (the way it comes).
+	FVector Spawns[3] = {FVector::ZeroVector, FVector::ZeroVector, FVector::ZeroVector};
+	bool bSpawns[3] = {false, false, false};
+	bSpawns[static_cast<int32>(EShooterTeam::CT)] =
+		GetTeamSpawnLocation(EShooterTeam::T, Spawns[static_cast<int32>(EShooterTeam::CT)]);
+	bSpawns[static_cast<int32>(EShooterTeam::T)] =
+		GetTeamSpawnLocation(EShooterTeam::CT, Spawns[static_cast<int32>(EShooterTeam::T)]);
+	constexpr EShooterTeam Watchers[] = {EShooterTeam::CT, EShooterTeam::T};
+	int32 SpawnNodes[3] = {INDEX_NONE, INDEX_NONE, INDEX_NONE};
+	for (const EShooterTeam Team : Watchers)
+	{
+		const int32 TeamIndex = static_cast<int32>(Team);
+		for (int32 NodeIndex = 0; NodeIndex < Nodes.Num() && bSpawns[TeamIndex]; ++NodeIndex)
+		{
+			if (SpawnNodes[TeamIndex] == INDEX_NONE ||
+				FVector::DistSquared2D(Nodes[NodeIndex].Location, Spawns[TeamIndex]) <
+					FVector::DistSquared2D(Nodes[SpawnNodes[TeamIndex]].Location, Spawns[TeamIndex]))
+			{
+				SpawnNodes[TeamIndex] = NodeIndex;
+			}
+		}
+	}
+	auto MakeLookout = [&](int32 NodeIndex, const FVector& SiteLocation)
+	{
+		FShooterLookout Lookout;
+		const UNavigationSystem::FNode& Node = Nodes[NodeIndex];
+		Lookout.Location = Node.Location;
+		for (const EShooterTeam Team : Watchers)
+		{
+			const int32 TeamIndex = static_cast<int32>(Team);
+			TArray<float, TInlineAllocator<4>>& Yaws = Lookout.WatchYaws[TeamIndex];
+			// The main way in: the path's first link toward the other team's spawn (CS's bots' approach areas).
+			TArray<int32> Approach;
+			if (SpawnNodes[TeamIndex] != INDEX_NONE &&
+				UNavigationSystem::FindNodePath(Nodes, NodeIndex, SpawnNodes[TeamIndex], Approach) &&
+				Approach.Num() >= 2)
+			{
+				AddYaw(Yaws, YawTo(Node.Location, Nodes[Approach[1]].Location));
+			}
+			// Away from the site: over it; then the links toward the other team's spawn, else any link.
+			if (FVector::Dist2D(Node.Location, SiteLocation) > LookoutOverSiteDistance)
+			{
+				AddYaw(Yaws, YawTo(Node.Location, SiteLocation));
+			}
+			const float ToEnemy = FVector::Dist2D(Node.Location, Spawns[TeamIndex]);
+			for (const int32 Link : Node.Links)
+			{
+				if (bSpawns[TeamIndex] && Nodes.IsValidIndex(Link) &&
+					FVector::Dist2D(Nodes[Link].Location, Spawns[TeamIndex]) < ToEnemy)
+				{
+					AddYaw(Yaws, YawTo(Node.Location, Nodes[Link].Location));
+				}
+			}
+			for (const int32 Link : Node.Links)
+			{
+				if (Yaws.Num() == 0 && Nodes.IsValidIndex(Link))
+				{
+					AddYaw(Yaws, YawTo(Node.Location, Nodes[Link].Location));
+				}
+			}
+		}
+		return Lookout;
+	};
+	// The flagged waypoints, each to its nearest site (ties: the first by name).
+	for (int32 NodeIndex = 0; NodeIndex < Nodes.Num(); ++NodeIndex)
+	{
+		if (!Nodes[NodeIndex].Flags.Contains(LookoutFlag))
+		{
+			continue;
+		}
+		int32 Nearest = 0;
+		for (int32 SiteIndex = 1; SiteIndex < BombSiteLocations.Num(); ++SiteIndex)
+		{
+			if (FVector::DistSquared2D(Nodes[NodeIndex].Location, BombSiteLocations[SiteIndex]) <
+				FVector::DistSquared2D(Nodes[NodeIndex].Location, BombSiteLocations[Nearest]))
+			{
+				Nearest = SiteIndex;
+			}
+		}
+		BombSiteLookouts[Nearest].Add(MakeLookout(NodeIndex, BombSiteLocations[Nearest]));
+	}
+	for (int32 SiteIndex = 0; SiteIndex < BombSiteNames.Num(); ++SiteIndex)
+	{
+		TArray<FShooterLookout>& Lookouts = BombSiteLookouts[SiteIndex];
+		const FVector& SiteLocation = BombSiteLocations[SiteIndex];
+		if (Lookouts.Num() > 0)
+		{
+			continue;
+		}
+		// A map without lookouts: the site's nearest waypoints (ties: the lower index).
+		TArray<int32> Near;
+		for (int32 NodeIndex = 0; NodeIndex < Nodes.Num(); ++NodeIndex)
+		{
+			if (FVector::DistSquared2D(Nodes[NodeIndex].Location, SiteLocation) <= FMath::Square(LookoutFallbackRadius))
+			{
+				Near.Add(NodeIndex);
+			}
+		}
+		Near.Sort(
+			[&Nodes, &SiteLocation](int32 A, int32 B)
+			{
+				const float DistA = FVector::DistSquared2D(Nodes[A].Location, SiteLocation);
+				const float DistB = FVector::DistSquared2D(Nodes[B].Location, SiteLocation);
+				return DistA < DistB || (DistA == DistB && A < B);
+			});
+		for (int32 Index = 0; Index < FMath::Min(Near.Num(), MaxFallbackLookouts); ++Index)
+		{
+			Lookouts.Add(MakeLookout(Near[Index], SiteLocation));
+		}
+		if (Lookouts.Num() > 0)
+		{
+			continue;
+		}
+		// No waypoints near: the site's middle, watching around from the other team's side.
+		FShooterLookout& Middle = Lookouts.AddDefaulted_GetRef();
+		Middle.Location = SiteLocation;
+		for (const EShooterTeam Team : Watchers)
+		{
+			const int32 TeamIndex = static_cast<int32>(Team);
+			const float Base = bSpawns[TeamIndex] ? YawTo(SiteLocation, Spawns[TeamIndex]) : 0.0f;
+			for (int32 Quarter = 0; Quarter < MaxLookoutWatchYaws; ++Quarter)
+			{
+				AddYaw(Middle.WatchYaws[TeamIndex], Base + (90.0f * static_cast<float>(Quarter)));
+			}
+		}
+	}
 }
 
 APawn* AShooterGameMode::SpawnDefaultPawnFor(AController* NewPlayer, AActor* StartSpot)
