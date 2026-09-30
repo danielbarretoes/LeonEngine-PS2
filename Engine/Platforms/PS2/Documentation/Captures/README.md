@@ -9,3 +9,5 @@ with.
   `TexturedCanvas` scene was added; that cell shows what `System.GSReference.Texture.TexturedCanvas` checks (the
   glyph's diagonal ramp, its copy turned in V and tinted, the bilinear scale, the translucent rotated quad). The
   reference and the desktop's emulator are compared pixel by pixel by `System.Renderer.GSEmulator.Conformance`.
+  Retaken at [ps2-polish](../../../../../Docs/PLANS/ps2-polish.md) P5b: the labels in the debug font compiled in
+  (DejaVu Sans Condensed at 10 pixels, proper case), the grid from y = 2.

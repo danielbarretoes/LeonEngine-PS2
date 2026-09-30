@@ -84,6 +84,10 @@
 #   ScoreboardTText lines) and the HUD's C4 / KIT text (ItemsText)
 #                                            -> removed in ps2-polish P6: UShooterScoreboardWidget (UMG's UTableView),
 #                                               the HUD's icons (EShooterHUDIcon, AShooterHUD::DrawHUDIcon)
+#   the GS debug text's 5x7 uppercase bitmap font (GlyphRows, GlyphOf, AppendGlyphRuns, FGSDebugDraw::GetTextWidth /
+#   GetTextHeight and DrawString's scale)    -> removed in ps2-polish P5b: the game's font compiled in
+#                                               (GSDebugFontData.inl, LeonCook -run=EmbedFont), FGSDebugDraw::UploadFont,
+#                                               MeasureString, GetLineHeight, FindLineBreak, EGSDebugFont
 #   FLegacyCoordinateConversion and LegacyCoordinateConversion.h
 #                                            -> UE-space data; only tests convert legacy (Y up, metres) data, the
 #                                               golden tables: see $TestsOnly
@@ -193,6 +197,9 @@ $Rules = @(
 	@{ Name = "the hand-drawn scoreboard (ps2-polish P6)"
 		Pattern = '\bDrawScoreboard\b|\bScoreboardCTText\b|\bScoreboardTText\b|\bItemsText\b'
 		Use = "UShooterScoreboardWidget (UMG's UTableView); the HUD's icons (EShooterHUDIcon, AShooterHUD::DrawHUDIcon)" },
+	@{ Name = "the GS debug text's 5x7 bitmap font (ps2-polish P5b)"
+		Pattern = '\b(GlyphRows|GlyphOf|AppendGlyphRuns)\b|FGSDebugDraw::(GetTextWidth|GetTextHeight)\b'
+		Use = "the game's font compiled in (GSDebugFontData.inl, LeonCook -run=EmbedFont): FGSDebugDraw::UploadFont, DrawString with an EGSDebugFont, MeasureString, GetLineHeight, FindLineBreak" },
 	@{ Name = "legacy GL / transform / axes"; Pattern = 'LegacyGL|FLegacyTransform|LegacyAxes'
 		Use = "UE view and projection matrices (ToGLClipSpace last), FTransform, UE axes" },
 	@{ Name = "legacy coordinate conversion outside the tests"

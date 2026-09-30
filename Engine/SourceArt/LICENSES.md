@@ -12,3 +12,10 @@ The DejaVu fonts' license allows using, copying, modifying and redistributing th
 fonts may not be sold by themselves, and a modified font must not keep the Bitstream, Vera or DejaVu names. The
 engine redistributes the TrueType files unmodified and the glyph pages rasterized from them (`/Engine/EngineFonts`,
 [ASSET_FORMATS.md](../../Docs/ASSET_FORMATS.md#fonts)).
+
+The font is also compiled into the engine's binaries ([ps2-polish](../../Docs/PLANS/ps2-polish.md) P5b): `LeonCook
+-run=EmbedFont` rasterizes it at 10 and 14 pixels into `Engine/Source/Runtime/GSCore/Private/GSDebugFontData.inl`
+(glyph bitmaps, metrics and kerning pairs, no outlines), which every program that links GSCore carries (the PS2's error
+screen and GSConformance draw with it: `FGSDebugDraw`). The generated file repeats the Bitstream copyright and
+trademark notice and names `EngineFonts/LICENSE.txt`; a binary distribution of the engine or a game ships that notice
+with the other third-party notices.

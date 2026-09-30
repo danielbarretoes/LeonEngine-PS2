@@ -336,6 +336,43 @@ Desviaciones:
   alinea: P6 lo pasa a `UTableView`.
 
 **P6 · HUD y scoreboard nuevos (M) — hecha**
+### P5b · La fuente del juego en la pantalla de error (S) — hecha
+
+Estado: hecha.
+- La pantalla de error y las etiquetas de GSConformance usaban la fuente 5x7 de `FGSDebugDraw`, solo mayúsculas salvo
+  la «m» y la «s» (el usuario veía mayúsculas y minúsculas mezcladas). Ahora dibujan DejaVu Sans Condensed, la fuente
+  del juego, compilada en el binario como las fuentes de reserva de UE: no carga ningún asset, así que sale igual con
+  el pak roto o ausente.
+- `LeonCook -run=EmbedFont` (`UEmbedFontCommandlet`, LeonEd) rasteriza el TTF con `UTrueTypeFontFactory` (el mismo
+  importador que los `UFont`) a 10 y 14 px (`EGSDebugFont::Tiny`, `Small`), ASCII y Latin-1, una página PSMT4 de
+  128 x 128 por tamaño y una CLUT de alfa de 16 niveles compartida (65 bloques del GS), con métricas y kerning, y
+  escribe `GSCore/Private/GSDebugFontData.inl` (LF, `.gitattributes`); `-check` y el test
+  `System.LeonEd.Commandlets.EmbedFont.MatchesSource` regeneran y comparan byte a byte.
+- `FGSDebugDraw::UploadFont(List, FontBlock)` sube páginas y CLUT en su sitio (datos estáticos) una vez; `DrawString`
+  dibuja un SPRITE texturizado por glifo (nearest, MODULATE, mezcla: el estado de la escena `TexturedCanvas`, D7), con
+  kerning y avances enteros; `MeasureString`, `GetLineHeight` y `FindLineBreak` (ajuste por palabras). Se conservan
+  los rectángulos y `UnitColor`.
+- VRAM: la pantalla de error y GSConformance ponen la fuente al principio del arena de texturas que les da
+  `FPS2RHI::AllocateTextureArena` (en la pantalla de error no queda nada residente; en GSConformance, encima del
+  display, las escenas usan los 512 KB de abajo). El overlay de estadísticas del juego no usa `FGSDebugDraw`: es texto
+  del canvas en los `UFont` desde P5, así que no convive con la caché de texturas.
+- Pantalla de error: cuerpo a 10 px con 11 px de interlineado, título a 14 px, párrafos ajustados a los márgenes; el
+  peor caso (8 errores de 3 líneas y la pista) cabe en 448 líneas (`System.GSCore.DebugDraw.LineBreak`). GSConformance:
+  etiquetas a 10 px, filas de 74 px desde y = 2.
+- D10: fuera la tabla 5x7, `GlyphOf`, `AppendGlyphRuns`, `GetTextWidth` / `GetTextHeight` y la escala de
+  `DrawString`, con su regla en `CheckBannedApis.ps1`. `FChar::DecodeCodePoint` (Core) es el decodificador UTF-8 que
+  comparten `UFont` y el texto de depuración.
+- Tests: `System.GSCore.DebugDraw.Upload`, `.Measure`, `.LineBreak`, `.String` (reescrito),
+  `System.LeonEd.Commandlets.EmbedFont.MatchesSource`, `System.GSReference.DebugDraw.Text` (CRC 0xa5b04557, visto a
+  ojo) y `System.Renderer.GSEmulator.DebugText` (0 píxeles de diferencia).
+- ELF: ShooterGame 4 829 156 → 4 852 144 bytes (+22 988), GSConformance 1 477 128 → 1 498 852 (+21 724).
+- PCSX2: capturas `p5b_errorscreen_pcsx2.png` y `p5b_gsconformance_pcsx2.png` en el scratchpad (`polish/`);
+  `Captures/GSConformance.png` actualizada (renderer software).
+
+Desviaciones: `MeasureString` sustituye a `GetTextWidth`; `DrawString` recibe el bloque de VRAM de la fuente
+(`FontBlock`) en vez de una escala. No hay escena de conformidad nueva: el estado es el de `TexturedCanvas`.
+
+**P6 · HUD y scoreboard nuevos (M)**
 - HUD rediseñado al estilo CS 1.6 con la fuente nueva e iconos (vida, blindaje, dinero, munición, tiempo, kill feed
   con icono del arma).
 - Scoreboard con la tabla de P5: por equipo nombre, bajas, muertes, BOT, muerto, bomba; se borra el dibujo a mano

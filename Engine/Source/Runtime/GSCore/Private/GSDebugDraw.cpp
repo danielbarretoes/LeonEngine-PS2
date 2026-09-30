@@ -6,350 +6,127 @@
 namespace
 {
 
-	/** A glyph's cell at scale 1, in pixels, and its advance in cells (5 columns and a space). */
-	constexpr float Cell = 2.0f;
-	constexpr float GlyphAdvanceCells = 6.0f;
-	constexpr float GlyphHeightCells = 7.0f;
-
-	/** 5x7 glyphs: seven rows, bit 4 the leftmost column. */
-	[[nodiscard]] const unsigned char* GlyphRows(char Ch)
+	/** A glyph of the debug font: its rectangle in its page, its bearing from the pen and the line's top, its advance.
+	 */
+	struct FGSDebugGlyph
 	{
-		switch (Ch)
-		{
-			case ' ':
-			{
-				static const unsigned char R[7] = {0, 0, 0, 0, 0, 0, 0};
-				return R;
-			}
-			case '.':
-			{
-				static const unsigned char R[7] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C};
-				return R;
-			}
-			case '0':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E};
-				return R;
-			}
-			case '1':
-			{
-				static const unsigned char R[7] = {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E};
-				return R;
-			}
-			case '2':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F};
-				return R;
-			}
-			case '3':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x01, 0x06, 0x01, 0x11, 0x0E};
-				return R;
-			}
-			case '4':
-			{
-				static const unsigned char R[7] = {0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02};
-				return R;
-			}
-			case '5':
-			{
-				static const unsigned char R[7] = {0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E};
-				return R;
-			}
-			case '6':
-			{
-				static const unsigned char R[7] = {0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E};
-				return R;
-			}
-			case '7':
-			{
-				static const unsigned char R[7] = {0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08};
-				return R;
-			}
-			case '8':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E};
-				return R;
-			}
-			case '9':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C};
-				return R;
-			}
-			case 'F':
-			{
-				static const unsigned char R[7] = {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10};
-				return R;
-			}
-			case 'P':
-			{
-				static const unsigned char R[7] = {0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10};
-				return R;
-			}
-			case 'S':
-			{
-				static const unsigned char R[7] = {0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E};
-				return R;
-			}
-			case 'M':
-			{
-				static const unsigned char R[7] = {0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11};
-				return R;
-			}
-			case 'm':
-			{
-				static const unsigned char R[7] = {0x00, 0x00, 0x1A, 0x15, 0x15, 0x15, 0x15};
-				return R;
-			}
-			case 's':
-			{
-				static const unsigned char R[7] = {0x00, 0x00, 0x0F, 0x10, 0x0E, 0x01, 0x1E};
-				return R;
-			}
-			case 'C':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E};
-				return R;
-			}
-			case 'D':
-			{
-				static const unsigned char R[7] = {0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E};
-				return R;
-			}
-			case 'E':
-			{
-				static const unsigned char R[7] = {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F};
-				return R;
-			}
-			case 'W':
-			{
-				static const unsigned char R[7] = {0x11, 0x11, 0x11, 0x15, 0x15, 0x1B, 0x11};
-				return R;
-			}
-			case 'N':
-			{
-				static const unsigned char R[7] = {0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11};
-				return R;
-			}
-			case 'X':
-			{
-				static const unsigned char R[7] = {0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11};
-				return R;
-			}
-			case 'Y':
-			{
-				static const unsigned char R[7] = {0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04};
-				return R;
-			}
-			case 'I':
-			{
-				static const unsigned char R[7] = {0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E};
-				return R;
-			}
-			case 'T':
-			{
-				static const unsigned char R[7] = {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04};
-				return R;
-			}
-			// Engine stats HUD letters (RAM / VRAM / RES / MB).
-			case 'R':
-			{
-				static const unsigned char R[7] = {0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11};
-				return R;
-			}
-			case 'A':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11};
-				return R;
-			}
-			case 'B':
-			{
-				static const unsigned char R[7] = {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E};
-				return R;
-			}
-			case 'K':
-			{
-				static const unsigned char R[7] = {0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11};
-				return R;
-			}
-			case 'V':
-			{
-				static const unsigned char R[7] = {0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04};
-				return R;
-			}
-			// Remaining uppercase + ':' so any HUD label renders.
-			case 'G':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F};
-				return R;
-			}
-			case 'H':
-			{
-				static const unsigned char R[7] = {0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11};
-				return R;
-			}
-			case 'J':
-			{
-				static const unsigned char R[7] = {0x07, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0C};
-				return R;
-			}
-			case 'L':
-			{
-				static const unsigned char R[7] = {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F};
-				return R;
-			}
-			case 'O':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E};
-				return R;
-			}
-			case 'Q':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D};
-				return R;
-			}
-			case 'U':
-			{
-				static const unsigned char R[7] = {0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E};
-				return R;
-			}
-			case 'Z':
-			{
-				static const unsigned char R[7] = {0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F};
-				return R;
-			}
-			case ':':
-			{
-				static const unsigned char R[7] = {0x00, 0x0C, 0x0C, 0x00, 0x0C, 0x0C, 0x00};
-				return R;
-			}
-			case '-':
-			{
-				static const unsigned char R[7] = {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00};
-				return R;
-			}
-			case '/':
-			{
-				static const unsigned char R[7] = {0x01, 0x01, 0x02, 0x04, 0x08, 0x10, 0x10};
-				return R;
-			}
-			// Punctuation for the error screen's messages (paths, log lines).
-			case '(':
-			{
-				static const unsigned char R[7] = {0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02};
-				return R;
-			}
-			case ')':
-			{
-				static const unsigned char R[7] = {0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08};
-				return R;
-			}
-			case ',':
-			{
-				static const unsigned char R[7] = {0x00, 0x00, 0x00, 0x00, 0x0C, 0x04, 0x08};
-				return R;
-			}
-			case '\'':
-			{
-				static const unsigned char R[7] = {0x04, 0x04, 0x08, 0x00, 0x00, 0x00, 0x00};
-				return R;
-			}
-			case '_':
-			{
-				static const unsigned char R[7] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1F};
-				return R;
-			}
-			case '>':
-			{
-				static const unsigned char R[7] = {0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x08};
-				return R;
-			}
-			case '<':
-			{
-				static const unsigned char R[7] = {0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02};
-				return R;
-			}
-			case '=':
-			{
-				static const unsigned char R[7] = {0x00, 0x00, 0x1F, 0x00, 0x1F, 0x00, 0x00};
-				return R;
-			}
-			case '!':
-			{
-				static const unsigned char R[7] = {0x04, 0x04, 0x04, 0x04, 0x04, 0x00, 0x04};
-				return R;
-			}
-			case '[':
-			{
-				static const unsigned char R[7] = {0x0E, 0x08, 0x08, 0x08, 0x08, 0x08, 0x0E};
-				return R;
-			}
-			case ']':
-			{
-				static const unsigned char R[7] = {0x0E, 0x02, 0x02, 0x02, 0x02, 0x02, 0x0E};
-				return R;
-			}
-			case '?':
-			{
-				static const unsigned char R[7] = {0x0E, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04};
-				return R;
-			}
-			case '+':
-			{
-				static const unsigned char R[7] = {0x00, 0x04, 0x04, 0x1F, 0x04, 0x04, 0x00};
-				return R;
-			}
-			default:
-				return nullptr;
-		}
+		uint8 U;
+		uint8 V;
+		uint8 Width;
+		uint8 Height;
+		int8 OffsetX;
+		int8 OffsetY;
+		/** Pixels the pen moves; 0 when the font has no glyph for the code point. */
+		uint8 Advance;
+	};
+
+	/** Pixels added to a character's advance when a given one follows it: (first << 8) | second. */
+	struct FGSDebugKerningPair
+	{
+		uint16 Pair;
+		int8 Amount;
+	};
+
+	/** One size of the debug font: its metrics, its PSMT4 page and where the page goes from the font's first block. */
+	struct FGSDebugFontSize
+	{
+		int32 PixelHeight;
+		int32 Ascent;
+		int32 Descent;
+		int32 Leading;
+		int32 Width;
+		int32 Height;
+		/** TEX0's TW and TH (log2 of the size) and TBW. */
+		uint8 TW;
+		uint8 TH;
+		uint8 TBW;
+		uint32 Block;
+		const uint8* Texels;
+		/** By code point, 0 to 255. */
+		const FGSDebugGlyph* Glyphs;
+		const FGSDebugKerningPair* KerningPairs;
+		int32 NumKerningPairs;
+	};
+
+} // namespace
+
+#include "GSDebugFontData.inl"
+
+namespace
+{
+
+	static_assert(UE_ARRAY_COUNT(GSDebugFontData::Sizes) == int32(EGSDebugFont::Small) + 1, "a size per EGSDebugFont");
+
+	[[nodiscard]] const FGSDebugFontSize& GetSize(EGSDebugFont Font)
+	{
+		return GSDebugFontData::Sizes[FMath::Clamp(int32(Font), 0, int32(EGSDebugFont::Small))];
 	}
 
-	/** Appends one glyph as a sprite per run of set pixels in each row (the colour and PRIM are already set). */
-	void AppendGlyphRuns(
-		FGSCommandList& List, const FGSDrawEnvironment& Environment, float X, float Y, char Ch, float InCell)
+	/** The glyph of a code point, else '?' (UFont's NullCharacter); null when there is neither. */
+	[[nodiscard]] const FGSDebugGlyph* FindGlyph(const FGSDebugFontSize& Size, uint32 CodePoint)
 	{
-		const unsigned char* Rows = GlyphRows(Ch);
-		if (Rows == nullptr)
+		if (CodePoint < 256 && Size.Glyphs[CodePoint].Advance != 0)
 		{
-			return;
+			return &Size.Glyphs[CodePoint];
 		}
-		for (int32 Row = 0; Row < 7; ++Row)
-		{
-			const unsigned char Bits = Rows[Row];
-			int32 Col = 0;
-			while (Col < 5)
-			{
-				while (Col < 5 && (Bits & static_cast<unsigned char>(0x10 >> Col)) == 0)
-				{
-					++Col;
-				}
-				if (Col >= 5)
-				{
-					break;
-				}
-				const int32 RunStart = Col;
-				while (Col < 5 && (Bits & static_cast<unsigned char>(0x10 >> Col)) != 0)
-				{
-					++Col;
-				}
-				const float X0 = X + (float(RunStart) * InCell);
-				const float X1 = X + (float(Col) * InCell);
-				const float Y0 = Y + (float(Row) * InCell);
-				List.AddVertex(Environment.PixelVertex(X0, Y0));
-				List.AddVertex(Environment.PixelVertex(X1, Y0 + InCell));
-			}
-		}
+		const FGSDebugGlyph& Null = Size.Glyphs[uint32('?')];
+		return Null.Advance != 0 ? &Null : nullptr;
 	}
 
-	/** The glyph a character draws as: lowercase is uppercase but for the "ms" of the timings. */
-	[[nodiscard]] char GlyphOf(char Ch)
+	/** The kerning between two code points (a binary search of the sorted pairs). */
+	[[nodiscard]] int32 GetKerning(const FGSDebugFontSize& Size, uint32 First, uint32 Second)
 	{
-		return (Ch >= 'a' && Ch <= 'z' && Ch != 'm' && Ch != 's') ? char(FChar::ToUpper(Ch)) : Ch;
+		if (First > 255 || Second > 255)
+		{
+			return 0;
+		}
+		const uint16 Pair = uint16((First << 8) | Second);
+		int32 Low = 0;
+		int32 High = Size.NumKerningPairs - 1;
+		while (Low <= High)
+		{
+			const int32 Middle = (Low + High) / 2;
+			const uint16 Candidate = Size.KerningPairs[Middle].Pair;
+			if (Candidate == Pair)
+			{
+				return Size.KerningPairs[Middle].Amount;
+			}
+			if (Candidate < Pair)
+			{
+				Low = Middle + 1;
+			}
+			else
+			{
+				High = Middle - 1;
+			}
+		}
+		return 0;
+	}
+
+	/** The end of Text's first NumBytes bytes, or of the whole string. */
+	[[nodiscard]] const char* GetEnd(const char* Text, int32 NumBytes)
+	{
+		if (NumBytes >= 0)
+		{
+			return Text + NumBytes;
+		}
+		const char* End = Text;
+		while (*End != '\0')
+		{
+			++End;
+		}
+		return End;
 	}
 
 	[[nodiscard]] uint8 UnitToByte(float Value)
 	{
 		return uint8(FMath::Clamp(int32((Value * 255.0f) + 0.5f), 0, 255));
+	}
+
+	/** A UnitColor channel (0xff full) as MODULATE takes it (0x80 full). */
+	[[nodiscard]] uint8 ToModulate(uint8 Value)
+	{
+		return uint8(((uint32(Value) * 0x80u) + 127u) / 255u);
 	}
 
 } // namespace
@@ -364,40 +141,171 @@ FGSRGBAQ FGSDebugDraw::UnitColor(float R, float G, float B, float Alpha)
 	return Color;
 }
 
-float FGSDebugDraw::GetTextWidth(const char* Text, float Scale)
+uint32 FGSDebugDraw::GetFontBlocks()
 {
-	int32 Length = 0;
-	for (const char* P = Text; P != nullptr && *P != '\0'; ++P)
+	return GSDebugFontData::NumBlocks;
+}
+
+void FGSDebugDraw::UploadFont(FGSCommandList& List, uint32 FontBlock)
+{
+	check(FontBlock % 32 == 0);
+	FGSBitBltBuf Clut;
+	Clut.DBP = uint16(FontBlock + GSDebugFontData::ClutBlock);
+	Clut.DBW = 1;
+	Clut.DPSM = EGSPixelFormat::PSMCT32;
+	List.UploadImageInPlace(
+		Clut, 0, 0, 8, 2, MakeArrayView(GSDebugFontData::Clut, UE_ARRAY_COUNT(GSDebugFontData::Clut)));
+	for (const FGSDebugFontSize& Size : GSDebugFontData::Sizes)
 	{
-		++Length;
+		FGSBitBltBuf Page;
+		Page.DBP = uint16(FontBlock + Size.Block);
+		Page.DBW = Size.TBW;
+		Page.DPSM = EGSPixelFormat::PSMT4;
+		List.UploadImageInPlace(Page, 0, 0, uint16(Size.Width), uint16(Size.Height),
+			MakeArrayView(Size.Texels, (Size.Width * Size.Height) / 2));
 	}
-	return float(Length) * GlyphAdvanceCells * Cell * (Scale > 0.0f ? Scale : 1.0f);
+	List.TexFlush();
 }
 
-float FGSDebugDraw::GetTextHeight(float Scale)
+int32 FGSDebugDraw::GetLineHeight(EGSDebugFont Font)
 {
-	return GlyphHeightCells * Cell * (Scale > 0.0f ? Scale : 1.0f);
+	const FGSDebugFontSize& Size = GetSize(Font);
+	return Size.Ascent + Size.Descent + Size.Leading;
 }
 
-void FGSDebugDraw::DrawString(FGSCommandList& List, const FGSDrawEnvironment& Environment, float X, float Y,
-	const char* Text, const FGSRGBAQ& Color, float Scale)
+int32 FGSDebugDraw::MeasureString(const char* Text, EGSDebugFont Font, int32 NumBytes)
+{
+	if (Text == nullptr)
+	{
+		return 0;
+	}
+	const FGSDebugFontSize& Size = GetSize(Font);
+	const char* End = GetEnd(Text, NumBytes);
+	int32 Width = 0;
+	uint32 Previous = 0;
+	for (const char* Cursor = Text; Cursor < End;)
+	{
+		const uint32 CodePoint = FCharAnsi::DecodeCodePoint(Cursor, End);
+		if (const FGSDebugGlyph* Glyph = FindGlyph(Size, CodePoint))
+		{
+			Width += (Previous != 0 ? GetKerning(Size, Previous, CodePoint) : 0) + Glyph->Advance;
+		}
+		Previous = CodePoint;
+	}
+	return Width;
+}
+
+int32 FGSDebugDraw::FindLineBreak(const char* Text, int32 MaxWidth, EGSDebugFont Font)
+{
+	if (Text == nullptr)
+	{
+		return 0;
+	}
+	const char* LineEnd = Text;
+	while (*LineEnd != '\0' && *LineEnd != '\n')
+	{
+		++LineEnd;
+	}
+	const FGSDebugFontSize& Size = GetSize(Font);
+	int32 Width = 0;
+	uint32 Previous = 0;
+	int32 Fit = 0;
+	int32 AfterLastSpace = 0;
+	for (const char* Cursor = Text; Cursor < LineEnd;)
+	{
+		const uint32 CodePoint = FCharAnsi::DecodeCodePoint(Cursor, LineEnd);
+		if (const FGSDebugGlyph* Glyph = FindGlyph(Size, CodePoint))
+		{
+			Width += (Previous != 0 ? GetKerning(Size, Previous, CodePoint) : 0) + Glyph->Advance;
+		}
+		Previous = CodePoint;
+		if (Width > MaxWidth && Fit > 0)
+		{
+			// A space past the edge ends the line (drawn as nothing); a word would be split: the line ends after its
+			// last space, if it has one.
+			if (CodePoint == ' ')
+			{
+				return int32(Cursor - Text);
+			}
+			return AfterLastSpace > 0 ? AfterLastSpace : Fit;
+		}
+		Fit = int32(Cursor - Text);
+		AfterLastSpace = CodePoint == ' ' ? Fit : AfterLastSpace;
+	}
+	return Fit;
+}
+
+void FGSDebugDraw::DrawString(FGSCommandList& List, const FGSDrawEnvironment& Environment, uint32 FontBlock, float X,
+	float Y, const char* Text, const FGSRGBAQ& Color, EGSDebugFont Font)
 {
 	if (Text == nullptr || *Text == '\0')
 	{
 		return;
 	}
-	const float LocalCell = Cell * (Scale > 0.0f ? Scale : 1.0f);
-	// An overlay: no depth test, so the scene cannot cover the text; opaque sprites.
+	const FGSDebugFontSize& Size = GetSize(Font);
+	// An overlay: no depth test, so the scene cannot cover the text.
 	List.SetTest(0, FGSDrawEnvironment::DepthTest(false));
+	// The page and the shared CLUT (loaded with TEX0), sampled one texel a pixel, clamped; MODULATE by the colour,
+	// blended by the coverage (the environment's (Cs - Cd) * As + Cd).
+	FGSTex0 Tex0;
+	Tex0.TBP0 = uint16(FontBlock + Size.Block);
+	Tex0.TBW = Size.TBW;
+	Tex0.PSM = EGSPixelFormat::PSMT4;
+	Tex0.TW = Size.TW;
+	Tex0.TH = Size.TH;
+	Tex0.bRGBA = true;
+	Tex0.TFX = EGSTextureFunction::Modulate;
+	Tex0.CBP = uint16(FontBlock + GSDebugFontData::ClutBlock);
+	Tex0.CPSM = EGSPixelFormat::PSMCT32;
+	Tex0.CLD = 1;
+	List.SetTex0(0, Tex0);
+	FGSTex1 Nearest;
+	Nearest.bFixedLOD = true;
+	List.SetTex1(0, Nearest);
+	FGSClamp Clamp;
+	Clamp.WMS = EGSWrapMode::Clamp;
+	Clamp.WMT = EGSWrapMode::Clamp;
+	List.SetClamp(0, Clamp);
 	FGSPrim Sprite;
 	Sprite.Type = EGSPrimitive::Sprite;
+	Sprite.bTextured = true;
+	Sprite.bUseUV = true;
+	Sprite.bAlphaBlend = true;
 	List.SetPrim(Sprite);
-	List.SetRGBAQ(Color);
-	float Cx = X;
-	for (const char* P = Text; *P != '\0'; ++P)
+	FGSRGBAQ Tint = Color;
+	Tint.R = ToModulate(Color.R);
+	Tint.G = ToModulate(Color.G);
+	Tint.B = ToModulate(Color.B);
+	List.SetRGBAQ(Tint);
+
+	const char* End = GetEnd(Text, INDEX_NONE);
+	int32 PenX = FMath::RoundToInt(X);
+	const int32 Top = FMath::RoundToInt(Y);
+	uint32 Previous = 0;
+	for (const char* Cursor = Text; Cursor < End;)
 	{
-		AppendGlyphRuns(List, Environment, Cx, Y, GlyphOf(*P), LocalCell);
-		Cx += GlyphAdvanceCells * LocalCell;
+		const uint32 CodePoint = FCharAnsi::DecodeCodePoint(Cursor, End);
+		const FGSDebugGlyph* Glyph = FindGlyph(Size, CodePoint);
+		if (Glyph == nullptr)
+		{
+			Previous = CodePoint;
+			continue;
+		}
+		PenX += Previous != 0 ? GetKerning(Size, Previous, CodePoint) : 0;
+		Previous = CodePoint;
+		if (Glyph->Width != 0 && Glyph->Height != 0)
+		{
+			// The texels map to the pixels one to one: the corners half a pixel up and left, so each pixel's centre
+			// samples its texel's (the canvas's glyphs, the TexturedCanvas scene).
+			const float Left = float(PenX + Glyph->OffsetX) - 0.5f;
+			const float GlyphTop = float(Top + Glyph->OffsetY) - 0.5f;
+			List.SetUV(FGSUV{GSToFixed4(float(Glyph->U), 14), GSToFixed4(float(Glyph->V), 14)});
+			List.AddVertex(Environment.PixelVertex(Left, GlyphTop));
+			List.SetUV(
+				FGSUV{GSToFixed4(float(Glyph->U + Glyph->Width), 14), GSToFixed4(float(Glyph->V + Glyph->Height), 14)});
+			List.AddVertex(Environment.PixelVertex(Left + float(Glyph->Width), GlyphTop + float(Glyph->Height)));
+		}
+		PenX += Glyph->Advance;
 	}
 	List.SetTest(0, FGSDrawEnvironment::DepthTest(true));
 }

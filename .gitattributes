@@ -32,3 +32,6 @@ Engine/Source/Programs/LeonHeaderTool/Tests/** text eol=lf
 
 # Mesh sources whose bytes are hashed at import (UAssetImportData's MD5, the import identity): no line-ending conversion
 *.gltf -text
+
+# Generated sources compared byte for byte with a fresh generation (LeonCook -run=EmbedFont): LF everywhere
+Engine/Source/Runtime/GSCore/Private/GSDebugFontData.inl text eol=lf

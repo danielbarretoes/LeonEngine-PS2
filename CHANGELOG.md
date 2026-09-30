@@ -224,6 +224,19 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 - `AShooterGameMode::bFillTeamsWithBots` and `AShooterAIController::Difficulty`, the single scale of the bots' skill
   ([ps2-polish](Docs/PLANS/ps2-polish.md) P9, D10): `NumBots` with `RebalanceBots`, and the difficulty presets.
   `CheckBannedApis.ps1` rejects them.
+- The GS debug text's 5x7 uppercase bitmap font (`GlyphRows`, `GlyphOf`, `FGSDebugDraw::GetTextWidth` /
+  `GetTextHeight`, `DrawString`'s scale; [ps2-polish](Docs/PLANS/ps2-polish.md) P5b, D10): the PS2's error screen and
+  GSConformance's labels drew lowercase as uppercase but for "m" and "s". `FGSDebugDraw` now draws the game's DejaVu
+  Sans Condensed compiled in (`GSDebugFontData.inl`, written by the new `LeonCook -run=EmbedFont` with
+  `UTrueTypeFontFactory` at 10 and 14 pixels: two 128 x 128 PSMT4 pages and an alpha CLUT, 65 GS blocks, uploaded in
+  place by `FGSDebugDraw::UploadFont`), a textured SPRITE a glyph with kerning and whole-pixel advances, UTF-8 and
+  Latin-1; `MeasureString`, `GetLineHeight` and `FindLineBreak` word-wrap the error screen at its margins. No asset is
+  loaded, so it still shows with a missing or damaged pak. The ELFs grow by 23 KB (ShooterGame 4 829 156 to 4 852 144
+  bytes, GSConformance 1 477 128 to 1 498 852). Tests: `System.GSCore.DebugDraw.Upload`, `.Measure`, `.LineBreak`,
+  `.String` rewritten, `System.LeonEd.Commandlets.EmbedFont.MatchesSource` (the checked-in file is what the generator
+  makes today), `System.GSReference.DebugDraw.Text` (the frame's CRC, verified by eye) and
+  `System.Renderer.GSEmulator.DebugText` (the emulator against the reference, 0 pixels apart). `CheckBannedApis.ps1`
+  rejects the old names. `FChar::DecodeCodePoint` (Core) is the UTF-8 decoder `UFont` and the debug text share.
 - `stb_easy_font` (the HUD's bitmap font), `HudFontScale`, `HudLineHeight`, `FCanvas::DrawTextBlock`, the canvas
   text's scale argument and `FPaintContext::MeasureTextOnly` ([ps2-polish](Docs/PLANS/ps2-polish.md) P5, D10):
   `UFont`, `FCanvas::DrawText` / `MeasureText` with a font, `UFont::GetLineHeight`. `CheckBannedApis.ps1` rejects them.

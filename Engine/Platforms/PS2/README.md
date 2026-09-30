@@ -144,7 +144,7 @@ Adds `PS2RHI` (private).
 | File | What it does |
 | --- | --- |
 | `Private/LaunchPS2.cpp` | `main()` → `GuardedMain()` (UE: `Launch<Platform>.cpp`): resets the IOP, appends the arguments of `LeonCommandLine.txt` to `argv`, and shows the error screen when the game returns an error |
-| `Private/PS2ErrorScreen.h/.cpp` | `FPS2ErrorScreen`: the log's last errors on a red screen when the game stops before it plays or on a fatal error, recorded with `FGSDebugDraw` (GSCore) into an `FGSCommandList` and submitted to `FPS2RHI` |
+| `Private/PS2ErrorScreen.h/.cpp` | `FPS2ErrorScreen`: the log's last errors on a red screen when the game stops before it plays or on a fatal error, recorded with `FGSDebugDraw` (GSCore; the game's font compiled in, uploaded to the start of the texture arena, the paragraphs word-wrapped at the margins) into an `FGSCommandList` and submitted to `FPS2RHI` |
 
 ### PS2RHI — `Source/Runtime/PS2RHI/`
 
@@ -375,7 +375,7 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program VU1Conformance -Buil
 The `GSConformance` program (`Source/Programs/GSConformance`) draws GSCore's GS conformance scenes on the GS, three
 times their size in a grid with their names, on a 32-bit screen: what the reference rasterizer's tests check pixel by
 pixel, to compare with and capture in PCSX2 ([ps2-gs-parity](../../../Docs/PLANS/ps2-gs-parity.md), P2 and P3); the
-names are recorded with `FGSDebugDraw`. It needs no staged config.
+names are recorded with `FGSDebugDraw` in its 10-pixel font (compiled in, uploaded above the display: [ps2-polish](../../../Docs/PLANS/ps2-polish.md) P5b). It needs no staged config.
 
 ### ShooterGame on the EE
 

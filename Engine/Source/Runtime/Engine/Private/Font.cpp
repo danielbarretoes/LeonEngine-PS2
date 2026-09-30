@@ -102,48 +102,7 @@ void UFont::GetCharSize(uint32 CodePoint, float& OutWidth, float& OutHeight) con
 
 uint32 UFont::DecodeCodePoint(const TCHAR*& Cursor, const TCHAR* End)
 {
-	const uint8 Lead = uint8(*Cursor++);
-	if (Lead < 0x80)
-	{
-		return Lead;
-	}
-	// Two- and three-byte sequences (the Basic Multilingual Plane; the fonts stop at Latin-1).
-	int32 Continuations = 0;
-	uint32 CodePoint = 0;
-	if ((Lead & 0xe0) == 0xc0)
-	{
-		Continuations = 1;
-		CodePoint = Lead & 0x1f;
-	}
-	else if ((Lead & 0xf0) == 0xe0)
-	{
-		Continuations = 2;
-		CodePoint = Lead & 0x0f;
-	}
-	else
-	{
-		return Lead;
-	}
-	if (End - Cursor < Continuations)
-	{
-		return Lead;
-	}
-	for (int32 Index = 0; Index < Continuations; ++Index)
-	{
-		const uint8 Next = uint8(Cursor[Index]);
-		if ((Next & 0xc0) != 0x80)
-		{
-			return Lead;
-		}
-		CodePoint = (CodePoint << 6) | (Next & 0x3f);
-	}
-	// An overlong sequence is not UTF-8: its lead byte is Latin-1.
-	if (CodePoint < (Continuations == 1 ? 0x80u : 0x800u))
-	{
-		return Lead;
-	}
-	Cursor += Continuations;
-	return CodePoint;
+	return FChar::DecodeCodePoint(Cursor, End);
 }
 
 int32 UFont::GetLineWidth(const TCHAR* Text, int32 Count) const

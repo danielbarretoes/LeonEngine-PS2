@@ -1,4 +1,5 @@
 #include "AssetImportUtils.h"
+#include "Commandlets/EmbedFontCommandlet.h"
 #include "CoreMinimal.h"
 #include "EditorFramework/AssetImportData.h"
 #include "Engine/Font.h"
@@ -221,6 +222,35 @@ bool FLeonEdTrueTypeImportTest::RunTest(const FString& Parameters)
 	TestTrue("Saved again", FAssetImportUtils::SavePackage(Package, Font));
 	const TArray<uint8> SecondBytes = LeonEdTest::ReadBytes(Saved);
 	TestTrue("The same bytes", FirstBytes.Num() > 0 && FirstBytes == SecondBytes);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLeonEdEmbedFontTest, "System.LeonEd.Commandlets.EmbedFont.MatchesSource",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FLeonEdEmbedFontTest::RunTest(const FString& Parameters)
+{
+	// The GS debug font compiled into GSCore (GSDebugFontData.inl) is what LeonCook -run=EmbedFont makes of the
+	// engine's TrueType file today, byte for byte (its glyphs are the game's UFonts'); -check says so too. After a
+	// change to the font, the importer or the generator: run the commandlet and commit the file (Docs/TOOLS.md).
+	const TArray<uint8> Ttf = ReadEngineFont();
+	FString Source;
+	FString Error;
+	if (!TestTrue("Generated", UEmbedFontCommandlet::GenerateSource(Ttf, Source, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	FString Again;
+	TestTrue("Generated again", UEmbedFontCommandlet::GenerateSource(Ttf, Again, Error));
+	TestTrue("Deterministic", Source == Again);
+	TestFalse("LF line endings", Source.Contains(TEXT("\r")));
+	const TArray<uint8> CheckedIn = LeonEdTest::ReadBytes(UEmbedFontCommandlet::GetDefaultOutputPath());
+	const bool bSame =
+		CheckedIn.Num() == Source.Len() && FMemory::Memcmp(CheckedIn.GetData(), *Source, SIZE_T(CheckedIn.Num())) == 0;
+	TestTrue("GSDebugFontData.inl is up to date (LeonCook -run=EmbedFont)", bSame);
+	UEmbedFontCommandlet* Commandlet = NewObject<UEmbedFontCommandlet>();
+	TestEqual("-check agrees", Commandlet->Main(TEXT("-check")), bSame ? 0 : 1);
 	return true;
 }
 

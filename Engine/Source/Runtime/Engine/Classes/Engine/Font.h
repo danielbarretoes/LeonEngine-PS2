@@ -148,7 +148,8 @@ public:
 
 	/**
 	 * The next code point of UTF-8 text at Cursor, which moves past it (Leon: TCHAR is a byte). A byte that does not
-	 * start a valid sequence is taken as its Latin-1 character, so Latin-1 text reads too.
+	 * start a valid sequence is taken as its Latin-1 character, so Latin-1 text reads too (FChar::DecodeCodePoint,
+	 * which the GS's debug text shares).
 	 */
 	[[nodiscard]] static uint32 DecodeCodePoint(const TCHAR*& Cursor, const TCHAR* End);
 

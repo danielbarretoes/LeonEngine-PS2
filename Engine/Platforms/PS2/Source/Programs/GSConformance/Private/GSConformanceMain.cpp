@@ -15,15 +15,18 @@ namespace
 	constexpr int32 ScreenHeight = 448;
 	/**
 	 * Each scene's pixel as Scale x Scale screen pixels, in a grid of Columns (4 x 6 cells on the screen: the labels'
-	 * 7-pixel text over each cell, the rows touching, so 24 scenes fit the 448 lines).
+	 * line of the debug font's 10 pixels over each cell, the rows touching, so 24 scenes fit the 448 lines).
 	 */
 	constexpr int32 Scale = 2;
 	constexpr int32 Columns = 4;
 	constexpr float CellWidth = float(GSConformance::FrameWidth * Scale);
 	constexpr float CellHeight = float(GSConformance::FrameHeight * Scale);
 	constexpr float Gap = 16.0f;
-	constexpr float LabelHeight = 8.0f;
+	constexpr EGSDebugFont LabelFont = EGSDebugFont::Tiny;
+	constexpr float LabelHeight = 10.0f;
 	constexpr float RowPitch = LabelHeight + CellHeight;
+	constexpr float GridTop = 2.0f;
+	static_assert(GridTop + (6.0f * RowPitch) <= float(ScreenHeight), "six rows fit the screen");
 
 	/**
 	 * Shows the scene's frame buffer (FBP 0) at (Left, Top), pixels from the screen's top left: a sprite that samples
@@ -76,11 +79,22 @@ int main(int ArgC, char* ArgV[])
 		UE_LOG(LogGSConformance, Error, TEXT("GSConformance: the display did not initialize"));
 		return 1;
 	}
+	// The labels' font above the display (the scenes keep to the VRAM below it), uploaded with the first frame.
+	uint32 FontBlock = 0;
+	uint32 FreeBlocks = 0;
+	if (!FPS2RHI::AllocateTextureArena(FontBlock, FreeBlocks) || FreeBlocks < FGSDebugDraw::GetFontBlocks())
+	{
+		UE_LOG(LogGSConformance, Error, TEXT("GSConformance: no VRAM for the debug font"));
+		return 1;
+	}
+	FGSCommandList FontUpload;
+	FGSDebugDraw::UploadFont(FontUpload, FontBlock);
+	FPS2RHI::Submit(FontUpload);
+
 	const TArrayView<const FGSConformanceScene> Scenes = GSConformance::GetScenes();
 	UE_LOG(LogGSConformance, Display, TEXT("GSConformance: drawing %d scenes"), Scenes.Num());
 
 	const float GridLeft = (float(ScreenWidth) - ((CellWidth * Columns) + (Gap * (Columns - 1)))) * 0.5f;
-	const float GridTop = 6.0f;
 	const FGSRGBAQ LabelColor = FGSDebugDraw::UnitColor(0.9f, 0.9f, 0.8f);
 	for (;;)
 	{
@@ -99,7 +113,7 @@ int main(int ArgC, char* ArgV[])
 			const FGSDrawEnvironment Environment = FPS2RHI::GetDrawEnvironment();
 			FGSCommandList Show;
 			AppendShowScene(Show, Environment, Scene.FrameFormat, Left, Top + LabelHeight);
-			FGSDebugDraw::DrawString(Show, Environment, Left, Top, Scene.Name, LabelColor, 0.5f);
+			FGSDebugDraw::DrawString(Show, Environment, FontBlock, Left, Top, Scene.Name, LabelColor, LabelFont);
 			FPS2RHI::Submit(Show);
 		}
 		FPS2RHI::WaitVSync();
