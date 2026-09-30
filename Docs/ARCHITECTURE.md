@@ -664,7 +664,8 @@ ThirdPerson in [ps2-shipping](PLANS/ps2-shipping.md) N2.
 - `Init` (UE's `FEngineLoop::Init`): reads Leon's capture switches (`-Screenshot=<file.bmp>`, `-ExitAfterFrames=N`,
   `-ExitAfterSeconds=N`, `-benchmark`: the steps do not wait for the clock, `FApp::IsBenchmarking`; a capture is an unattended run, `FApp::IsUnattended`, so the viewport client ignores the OS input and
   the mouse cannot move the view), creates `GEngine` of the class `[/Script/Engine.Engine] GameEngine=` names (`UGameEngine`, in the
-  root set), queues `-ExecCmds="Cmd1;Cmd2"` (`;` or `,` separate them) in `GEngine->DeferredCommands`, then calls
+  root set), queues `-ExecCmds="Cmd1;Cmd2"` (`;` or `,` separate them) in `GEngine->DeferredCommands` (held until
+  frame N with `-ExecCmdsAfterFrames=N`, not in Shipping: [ps2-polish](PLANS/ps2-polish.md) P6's captures), then calls
   `GEngine->Init(this)` and `GEngine->Start()`. `UGameEngine::Init` starts the renderer on the window, creates the
   game instance (`GameInstanceClass`) and its world context, the viewport client (`GameViewportClientClassName`) on the
   window's `FViewport`, and the first local player (`SetupInitialLocalPlayer`); `Start` has the game instance open the
@@ -1168,7 +1169,10 @@ UWorld::LineBatcher (FDebugDraw), impact marks, tracers ------------------------
   (`IRendererModule::GetDisplayAspectRatio`: 4:3, the TV the frame's non-square pixels fill; `[/Script/Engine.RendererSettings]
   DisplayAspectRatio`, with `SyncInterval`, the PS2's values on every platform: [ps2-preview](PLANS/ps2-preview.md)).
 - **Canvas.** The HUD's widgets and the debug text draw into a frame `FCanvas` (tiles flat or textured and rotated,
-  lines, and text in a `UFont`, batched by depth sort key; the debug text uses key 1, so it goes under the HUD), which
+  icons (`FCanvasIcon`, `MakeIcon` / `DrawIcon`: a texture's region in texels, one to one), triangle items
+  (`FCanvasTriangleItem` / `FCanvasUVTri`: each corner's position, UV and colour, drawn in the tiles' order;
+  [ps2-polish](PLANS/ps2-polish.md) P6 / P7), lines, and text in a `UFont`, batched by depth sort key; the debug text
+  uses key 1, so it goes under the HUD), which
   `Flush_GameThread` hands to `IRendererModule::DrawCanvas`: blended by each item's alpha, without the depth test,
   after the scene. `FCanvas::GetPrimitives` gives runs of one primitive type and one texture: rectangles (a tile, a line
   along an axis, a glyph) and triangles (a slanted line, a rotated tile: `FCanvasTileItem::Rotation`); the renderer

@@ -200,8 +200,8 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction(TEXT("Crouch"), IE_Released, this, &AShooterCharacter::OnCrouchReleased);
 	PlayerInputComponent->BindAction(TEXT("Walk"), IE_Pressed, this, &AShooterCharacter::OnWalkPressed);
 	PlayerInputComponent->BindAction(TEXT("Walk"), IE_Released, this, &AShooterCharacter::OnWalkReleased);
-	PlayerInputComponent->BindAction(TEXT("Fire"), IE_Pressed, this, &AShooterCharacter::StartWeaponFire);
-	PlayerInputComponent->BindAction(TEXT("Fire"), IE_Released, this, &AShooterCharacter::StopWeaponFire);
+	PlayerInputComponent->BindAction(TEXT("Fire"), IE_Pressed, this, &AShooterCharacter::OnFirePressed);
+	PlayerInputComponent->BindAction(TEXT("Fire"), IE_Released, this, &AShooterCharacter::OnFireReleased);
 	PlayerInputComponent->BindAction(TEXT("Targeting"), IE_Pressed, this, &AShooterCharacter::StartSecondaryFire);
 	PlayerInputComponent->BindAction(TEXT("Reload"), IE_Pressed, this, &AShooterCharacter::ReloadWeapon);
 	PlayerInputComponent->BindAction(TEXT("PrimaryWeapon"), IE_Pressed, this, &AShooterCharacter::OnSelectPrimary);
@@ -447,6 +447,28 @@ void AShooterCharacter::StartWeaponFire()
 	{
 		CurrentWeapon->StartFire();
 	}
+}
+
+void AShooterCharacter::OnFirePressed()
+{
+	// CS: with the C4 drawn the primary fire plants it (held, as E); otherwise the weapon fires.
+	if (bBombDrawn)
+	{
+		bPlantingWithFire = StartUse();
+		return;
+	}
+	StartWeaponFire();
+}
+
+void AShooterCharacter::OnFireReleased()
+{
+	if (bPlantingWithFire)
+	{
+		bPlantingWithFire = false;
+		StopUse();
+		return;
+	}
+	StopWeaponFire();
 }
 
 void AShooterCharacter::StopWeaponFire()

@@ -274,6 +274,9 @@ public:
 	{
 		return bShowScoreboard;
 	}
+	/** Shows (1) or hides (0) the scoreboard as Tab does (CS: +showscores / -showscores; a capture's). */
+	UFUNCTION(Exec)
+	void ShowScores(int32 Show);
 
 	/**
 	 * Debug: views the map from a point, looking along Pitch / Yaw, through a camera actor (the view target) until
@@ -385,6 +388,11 @@ public:
 	/** 1: a press of the crouch key crouches or stands up (the default); 0: the key is held to crouch. */
 	UFUNCTION(Exec)
 	void SetToggleCrouch(int32 Toggle);
+	/** 1: the HUD shows its frame readout under the radar (the default); 0: it does not. */
+	UFUNCTION(Exec)
+	void SetShowFrameStats(int32 Show);
+	/** The HUD's frame readout shows (the default without options). */
+	[[nodiscard]] bool IsFrameStatsShown() const;
 
 	/** The options (loaded at BeginPlay for a player at a screen; the defaults otherwise), never null once playing. */
 	[[nodiscard]] UShooterPersistentUser* GetPersistentUser();

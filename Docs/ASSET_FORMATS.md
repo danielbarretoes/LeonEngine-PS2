@@ -435,7 +435,10 @@ texture pages the canvas samples; Leon has no runtime font cache, no composite f
 The engine's fonts are DejaVu Sans Condensed (`Engine/SourceArt/EngineFonts/`, the Bitstream Vera license with the
 DejaVu changes in the public domain: `LICENSE.txt` there, [Engine/SourceArt/LICENSES.md](../Engine/SourceArt/LICENSES.md))
 at 10, 14, 20 and 32 pixels: one page each (256 × 64, 128 × 128, 256 × 128 and 256 × 256: 8, 8, 16 and 32 KB of GS
-memory when drawn), with 293, 430, 555 and 678 kerning pairs.
+memory when drawn), with 293, 430, 555 and 678 kerning pairs. Its bold face, from the same release
+(`DejaVuSansCondensed-Bold.ttf`, [ps2-polish](PLANS/ps2-polish.md) P6), is imported at 14 pixels
+(`DejaVuSansCondensedBold14`, Latin-1) and at 24 (`DejaVuSansCondensedBold24`, `UnicodeRange=0020-007E`: ASCII only),
+the HUD's headings and numbers; nothing loads them but the config that names them (ShooterGame's HUD).
 
 ---
 

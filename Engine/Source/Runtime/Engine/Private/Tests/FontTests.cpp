@@ -271,4 +271,61 @@ bool FCanvasTexturedTileTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCanvasTrianglesAndIconsTest, "System.Engine.Canvas.TrianglesAndIcons",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FCanvasTrianglesAndIconsTest::RunTest(const FString& Parameters)
+{
+	// ps2-polish P6 / P7: an icon is a region of its texture in texels (UE: MakeIcon, DrawIcon), drawn one to one
+	// (nearest); a triangle item keeps each corner's position, texture coordinates and colour times its own, and is
+	// drawn in the tiles' order (a tile after it stays on top).
+	UTexture2D* Texture = UTexture2D::CreateTransient(64, 32);
+	if (!TestNotNull("A texture", Texture))
+	{
+		return false;
+	}
+	FCanvas Canvas(640, 448);
+	Canvas.DrawIcon(FCanvas::MakeIcon(Texture, 16.0f, 8.0f, 24.0f, 16.0f), 100.0f, 50.0f, 1.0f,
+		FLinearColor(1.0f, 0.5f, 0.25f, 1.0f));
+	FCanvasUVTri Triangle;
+	Triangle.V0_Pos = FVector2D(10.0f, 10.0f);
+	Triangle.V1_Pos = FVector2D(50.0f, 10.0f);
+	Triangle.V2_Pos = FVector2D(10.0f, 50.0f);
+	Triangle.V0_UV = FVector2D(0.25f, 0.5f);
+	Triangle.V1_UV = FVector2D(0.75f, 0.25f);
+	Triangle.V2_UV = FVector2D(0.5f, 1.0f);
+	Triangle.V1_Color = FLinearColor(1.0f, 1.0f, 1.0f, 0.5f);
+	FCanvasTriangleItem Item(TArrayView<const FCanvasUVTri>(&Triangle, 1), Texture);
+	Item.SetColor(FLinearColor(1.0f, 1.0f, 1.0f, 0.5f));
+	Canvas.DrawItem(Item);
+	Canvas.DrawTile(5.0f, 5.0f, 4.0f, 4.0f, FLinearColor::Black);
+	const FCanvasPrimitives Primitives(Canvas);
+	if (!TestEqual("Runs: the icon, the triangle, the tile", Primitives.Runs.Num(), 3))
+	{
+		return false;
+	}
+	const FCanvasPrimitiveRun& Icon = Primitives.Runs[0];
+	const FCanvasVertex& TopLeft = Primitives.Vertices[Icon.FirstVertex];
+	const FCanvasVertex& BottomRight = Primitives.Vertices[Icon.FirstVertex + 1];
+	TestTrue("The icon: one to one, nearest", Icon.Texture == Texture && Icon.bNearest);
+	TestTrue("Its rectangle",
+		TopLeft.X == 100.0f && TopLeft.Y == 50.0f && BottomRight.X == 124.0f && BottomRight.Y == 66.0f);
+	TestTrue(
+		"Its texels", TopLeft.U == 0.25f && TopLeft.V == 0.25f && BottomRight.U == 0.625f && BottomRight.V == 0.75f);
+	TestEqual("Its colour", TopLeft.G, 0.5f);
+	const FCanvasPrimitiveRun& Triangles = Primitives.Runs[1];
+	if (TestTrue("The triangle: textured, bilinear",
+			Triangles.Type == ECanvasPrimitive::Triangle && Triangles.NumVertices == 3 &&
+				Triangles.Texture == Texture && !Triangles.bNearest))
+	{
+		const FCanvasVertex& Second = Primitives.Vertices[Triangles.FirstVertex + 1];
+		TestTrue("A corner's position and UV",
+			Second.X == 50.0f && Second.Y == 10.0f && Second.U == 0.75f && Second.V == 0.25f);
+		TestEqual("Its colour times the item's", Second.A, 0.25f);
+		TestEqual("Another corner's alpha", Primitives.Vertices[Triangles.FirstVertex].A, 0.5f);
+	}
+	TestTrue("The tile after it on top", Primitives.Runs[2].Texture == nullptr);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

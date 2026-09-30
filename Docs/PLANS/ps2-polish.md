@@ -335,12 +335,60 @@ Desviaciones:
 - El marcador de ShooterGame sigue dibujado a mano con columnas alineadas por espacios, que la fuente proporcional ya no
   alinea: P6 lo pasa a `UTableView`.
 
-**P6 · HUD y scoreboard nuevos (M)**
+**P6 · HUD y scoreboard nuevos (M) — hecha**
 - HUD rediseñado al estilo CS 1.6 con la fuente nueva e iconos (vida, blindaje, dinero, munición, tiempo, kill feed
   con icono del arma).
 - Scoreboard con la tabla de P5: por equipo nombre, bajas, muertes, BOT, muerto, bomba; se borra el dibujo a mano
   (`DrawScoreboard`, `ShooterHUD.cpp:908`).
 - Tests de HUD actualizados; `MeasurePS2` para el coste del canvas (hoy 2,9 ms).
+
+Estado: hecha.
+- HUD (640 x 448): abajo a la izquierda vida (cruz, roja con 25 o menos) y blindaje (chaleco, con casco si lo
+  tiene); abajo a la derecha munición `cargador | reserva`, el nombre del arma encima (`(silenced)`/`(burst)`, `C4`
+  con la bomba sacada) y el dinero en verde con el carrito de la zona de compra mientras se puede comprar; a la
+  izquierda, a media altura, la bomba del portador (parpadea en rojo dentro de un sitio, como CS) y el kit; arriba en
+  el centro el reloj con cronómetro entre los marcadores `CT`/`T` y la ronda debajo, sobre una banda oscura; arriba a
+  la derecha el kill feed: asesino, icono del arma, icono de headshot, víctima, sobre una banda oscura. Bajo el radar,
+  una lectura compacta `30 fps  33.3 ms` (media de medio segundo), opción `bShowFrameStats` en
+  `UShooterPersistentUser` (`SetShowFrameStats 0|1`, activada por defecto); el overlay de `stat unit` sigue arriba a
+  la derecha y el kill feed empieza debajo. Los menús (compra, radio, rechazo) empiezan bajo esa lectura.
+- Contraste para el cielo de P8: todo texto e icono sobre el mundo lleva sombra negra de 1 px (opaca), el bloque del
+  centro y el kill feed van sobre bandas oscuras, y radar, scoreboard y menú de compra sobre paneles oscuros (0,82).
+  Comprobado con el color de fondo cambiado a azul cielo (`p6_skytest_*.png`).
+- Fuentes: DejaVu Sans Condensed Bold 2.37 vendorizada (misma licencia; `LICENSES.md`, `LIBRARIES.md`), importada a
+  14 px (Latin-1, títulos) y 24 px (solo ASCII, números); el HUD las carga por config (`NumberFontName`,
+  `BoldFontName`). Iconos: un atlas `/Game/UI/T_HUDIcons` de 256 x 64, blanco con la cobertura en el alfa (16 niveles:
+  PSMT4 al cocinar), dibujado por `SourceArt/UI/make_hud_icons.py` (biblioteca estándar de Python, mismos bytes cada
+  vez); tabla de rectángulos en `AShooterHUD::GetIconRect`; el canvas gana `FCanvasIcon` / `MakeIcon` / `DrawIcon` de
+  UE y `FCanvasTriangleItem` / `FCanvasUVTri` (para P7).
+- Nombres de CS (`AShooterWeapon::DisplayName`, `GetItemDisplayName`) en el HUD, el kill feed, el menú de compra y los
+  avisos (`Picked up AK-47`, `Bought M4A1`).
+- Scoreboard: `UShooterScoreboardWidget` (UMG): título con el mapa, por equipo cabecera (nombre, jugadores, puntuación
+  en la fuente de números) y un `UTableView` (Name, estado DEAD/BOMB, Score, Deaths, Latency con BOT) ordenado por
+  puntuación y, al empatar, por menos muertes; los muertos atenuados; BOMB solo para un terrorista o un espectador; la
+  fila del jugador resaltada; los espectadores debajo. Se rellena solo cuando cambia su clave. Se borra
+  `DrawScoreboard` y el texto `C4 KIT` (D10, regla nueva en `CheckBannedApis.ps1`).
+- Menú de compra con los widgets nuevos: cabecera (página, dinero) en negrita, rechazo, la página en un `UTableView`
+  (tecla, nombre, precio; categorías en ámbar con `>`, lo que no se puede pagar en gris, la línea del mando resaltada)
+  y la última compra.
+- Con el C4 sacado, el disparo planta mientras se mantiene (`AShooterCharacter::OnFirePressed` / `OnFireReleased`);
+  E / Triángulo sigue funcionando.
+- Capturas: `-ExecCmdsAfterFrames=N` (no en Shipping) retrasa `-ExecCmds=` hasta el frame N; `ShowScores 0|1` muestra
+  el scoreboard (documentado en TOOLS, SETUP y el README). Capturas en el scratchpad: `p6_hud_1500.png` (con kill feed
+  e iconos), `p6_scoreboard.png`, `p6_buymenu.png` y las de contraste `p6_skytest_*.png`.
+- Tests (590 del motor, 119 de ShooterGame): `ShooterGame.HUD.IconAtlas`, `.DisplayNames`, `.KillFeedIcons`,
+  `.Scoreboard`, `.BuyMenuTable`, `.FrameStats`, `ShooterGame.Input.FirePlantsTheBomb`,
+  `System.Engine.Canvas.TrianglesAndIcons`; `HUD.RoundInfo`, `HUD.TextCache`, `Settings.RoundTrip` y los de recoger
+  actualizados.
+- BotMatch 10 7 idéntico dos veces y sin cambios respecto a P3b: `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s),
+  seed 7, sides switched after round 5`.
+- `MeasurePS2` pendiente: PCSX2 estaba ocupado por otro agente y el presupuesto se agotó; sin fila en Budgets.md.
+
+Desviaciones:
+- El reloj y el marcador van arriba en el centro (como pedía el plan) y no abajo como en CS 1.6; el dinero va encima de
+  la munición.
+- La latencia del jugador humano es `0`: juega en local, no hay red.
+- Las fuentes negritas, ya paletizadas, no cuentan en el informe de VRAM del cook (como las de P5); el atlas sí.
 
 **P7 · Minimapa real (M)**
 - Commandlet `-run=BuildOverview` en LeonCook: renderiza el mapa desde arriba en ortográfica con `FGSReferenceRasterizer`

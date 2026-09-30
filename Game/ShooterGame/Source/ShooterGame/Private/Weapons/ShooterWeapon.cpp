@@ -147,6 +147,35 @@ UClass* AShooterWeapon::FindWeaponClass(const FString& Name)
 	return nullptr;
 }
 
+FString AShooterWeapon::GetItemDisplayName(const FString& ItemName)
+{
+	// The equipment and what is no weapon class (CS's buy menu and kill feed names).
+	struct FItemName
+	{
+		const TCHAR* Name;
+		const TCHAR* DisplayName;
+	};
+	static const FItemName Items[] = {
+		{TEXT("c4"), TEXT("C4")},
+		{TEXT("vest"), TEXT("Kevlar Vest")},
+		{TEXT("vesthelm"), TEXT("Kevlar + Helmet")},
+		{TEXT("defuser"), TEXT("Defuse Kit")},
+		{TEXT("primammo"), TEXT("Primary Ammo")},
+		{TEXT("secammo"), TEXT("Secondary Ammo")},
+		{TEXT("world"), TEXT("World")},
+	};
+	for (const FItemName& Item : Items)
+	{
+		if (ItemName.Equals(Item.Name, ESearchCase::IgnoreCase))
+		{
+			return Item.DisplayName;
+		}
+	}
+	const UClass* WeaponClass = FindWeaponClass(ItemName);
+	const AShooterWeapon* Defaults = WeaponClass != nullptr ? WeaponClass->GetDefaultObject<AShooterWeapon>() : nullptr;
+	return Defaults != nullptr && !Defaults->DisplayName.IsEmpty() ? Defaults->DisplayName : ItemName;
+}
+
 void AShooterWeapon::GetWeaponClasses(TArray<UClass*>& OutClasses)
 {
 	OutClasses.Reset();

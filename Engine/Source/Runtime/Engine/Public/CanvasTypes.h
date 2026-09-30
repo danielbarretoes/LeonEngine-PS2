@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CanvasItem.h"
 #include "CoreMinimal.h"
 #include "Fonts/TextLayout.h"
 #include "Misc/MemStack.h"
@@ -7,6 +8,7 @@
 class FCanvasItem;
 class FCanvasTextItem;
 class FCanvasTileItem;
+class FCanvasTriangleItem;
 class UFont;
 class UTexture;
 class UTexture2D;
@@ -30,6 +32,19 @@ enum class ECanvasPrimitive : uint8
 {
 	Rectangle,
 	Triangle,
+};
+
+/**
+ * A region of a texture, in texels, drawn as an icon (UE: FCanvasIcon, UCanvas::MakeIcon): a HUD's atlas holds many.
+ */
+struct FCanvasIcon
+{
+	const UTexture* Texture = nullptr;
+	/** The region's top-left texel (V from the top) and its size, texels (UE: U, V, UL, VL). */
+	float U = 0.0f;
+	float V = 0.0f;
+	float UL = 0.0f;
+	float VL = 0.0f;
 };
 
 /** A run of the canvas's vertices of one primitive type and one texture (FCanvas::GetPrimitives). */
@@ -113,6 +128,15 @@ public:
 	/** A tile or a text item, with what the calls above do not set (a rotation, a scale, an outline) (UE: DrawItem). */
 	void DrawItem(FCanvasItem& Item);
 
+	/** An icon of Texture's texels U, V to U + UL, V + VL (UE: UCanvas::MakeIcon). */
+	[[nodiscard]] static FCanvasIcon MakeIcon(const UTexture* Texture, float U, float V, float UL, float VL);
+	/**
+	 * Icon's texels at X, Y, Scale times their size, tinted by Color (UE: UCanvas::DrawIcon, which takes the canvas's
+	 * draw colour); nothing without a texture.
+	 */
+	void DrawIcon(
+		const FCanvasIcon& Icon, float X, float Y, float Scale = 1.0f, const FLinearColor& Color = FLinearColor::White);
+
 	/**
 	 * The size of multiline text in Font (null: UEngine::GetSmallFont): the longest line's width and the font's
 	 * GetLineHeight per line (UE: UCanvas::TextSize); zero without a font.
@@ -136,6 +160,7 @@ public:
 private:
 	friend class FCanvasTextItem;
 	friend class FCanvasTileItem;
+	friend class FCanvasTriangleItem;
 
 	struct FTileItem
 	{
@@ -154,6 +179,12 @@ private:
 		float PivotX = 0.0f;
 		float PivotY = 0.0f;
 		FLinearColor Color = FLinearColor::White;
+		/**
+		 * A triangle item instead of a rectangle (FCanvasTriangleItem): its NumTriangles triangles from FirstTriangle
+		 * of the batch's, in their colours times Color, drawn in the tiles' order.
+		 */
+		int32 FirstTriangle = 0;
+		int32 NumTriangles = 0;
 	};
 
 	struct FLineItem
@@ -189,6 +220,8 @@ private:
 	{
 		int32 DepthSortKey = 0;
 		TArray<FTileItem, TMemStackAllocator<>> Tiles;
+		/** The triangle items' triangles (their tiles say which). */
+		TArray<FCanvasUVTri, TMemStackAllocator<>> Triangles;
 		TArray<FLineItem, TMemStackAllocator<>> Lines;
 		TArray<FTextItem, TMemStackAllocator<>> Texts;
 	};

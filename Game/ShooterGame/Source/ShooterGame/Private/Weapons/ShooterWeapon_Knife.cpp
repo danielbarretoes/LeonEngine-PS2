@@ -27,6 +27,7 @@ AShooterWeapon_Knife::AShooterWeapon_Knife(const FObjectInitializer& ObjectIniti
 {
 	// CS 1.6's knife; DefaultGame.ini's [/Script/ShooterGame.ShooterWeapon_Knife] tunes it.
 	WeaponName = TEXT("knife");
+	DisplayName = TEXT("Knife");
 	Slot = EShooterWeaponSlot::Knife;
 	bInfiniteClip = true;
 	bAutomatic = true;

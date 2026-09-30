@@ -32,10 +32,7 @@ public:
 	FLinearColor SetColorValue = FLinearColor::White;
 };
 
-/**
- * A tile: a rectangle of a texture's texels, or of a colour, rotated about a pivot (UE: FCanvasTileItem). The minimap
- * draws the map's overview rotated with the view this way.
- */
+/** A tile: a rectangle of a texture's texels, or of a colour, rotated about a pivot (UE: FCanvasTileItem). */
 class ENGINE_API FCanvasTileItem : public FCanvasItem
 {
 public:
@@ -70,6 +67,43 @@ public:
 	FRotator Rotation = FRotator::ZeroRotator;
 	/** The point it turns about, a fraction of Size from the top-left corner (UE: PivotPoint). */
 	FVector2D PivotPoint = FVector2D(0.0f, 0.0f);
+};
+
+/** One triangle of a triangle item: its corners in pixels, their texture coordinates and colours (UE: FCanvasUVTri). */
+struct FCanvasUVTri
+{
+	FVector2D V0_Pos = FVector2D::ZeroVector;
+	FVector2D V0_UV = FVector2D::ZeroVector;
+	FLinearColor V0_Color = FLinearColor::White;
+	FVector2D V1_Pos = FVector2D::ZeroVector;
+	FVector2D V1_UV = FVector2D::ZeroVector;
+	FLinearColor V1_Color = FLinearColor::White;
+	FVector2D V2_Pos = FVector2D::ZeroVector;
+	FVector2D V2_UV = FVector2D::ZeroVector;
+	FLinearColor V2_Color = FLinearColor::White;
+};
+
+/**
+ * Triangles of a texture, each corner with its own texture coordinates and colour, times the item's colour (UE:
+ * FCanvasTriangleItem; Position is unused). What a tile cannot draw: a region of a texture turned inside a shape that
+ * stays put, as the radar draws the map's overview turned with the view inside its square (ps2-polish P7). They are
+ * drawn in the order of the batch's tiles, sampled bilinear. Up to eight triangles are kept inline (no allocation).
+ */
+class ENGINE_API FCanvasTriangleItem : public FCanvasItem
+{
+public:
+	/** One triangle with its texture coordinates (0 to 1, V from the top) (UE's constructor with UVs). */
+	FCanvasTriangleItem(const FVector2D& InPointA, const FVector2D& InPointB, const FVector2D& InPointC,
+		const FVector2D& InTexCoordPointA, const FVector2D& InTexCoordPointB, const FVector2D& InTexCoordPointC,
+		const UTexture* InTexture);
+	/** A list of triangles (UE: FCanvasTriangleItem(TriangleList, Texture)). */
+	FCanvasTriangleItem(TArrayView<const FCanvasUVTri> InTriangleList, const UTexture* InTexture);
+
+	void Draw(FCanvas* InCanvas) override;
+
+	/** Null draws the triangles in their colours. */
+	const UTexture* Texture = nullptr;
+	TArray<FCanvasUVTri, TInlineAllocator<8>> TriangleList;
 };
 
 /**

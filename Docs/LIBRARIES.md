@@ -51,7 +51,9 @@ Math on PS2 uses Core's math (`FVector`, `FMatrix`, `FMath`, …) and `FPlatform
 
 Third-party data that ships in the content, not code: DejaVu Sans Condensed 2.37
 ([dejavu-fonts](https://dejavu-fonts.github.io/), `Engine/SourceArt/EngineFonts/DejaVuSansCondensed.ttf`), the engine's
-font, imported at 10, 14, 20 and 32 pixels ([ASSET_FORMATS.md](ASSET_FORMATS.md#fonts)). License: the Bitstream Vera
+font, imported at 10, 14, 20 and 32 pixels ([ASSET_FORMATS.md](ASSET_FORMATS.md#fonts)), and DejaVu Sans Condensed
+Bold from the same release (`DejaVuSansCondensed-Bold.ttf`, [ps2-polish](PLANS/ps2-polish.md) P6), imported at 14
+pixels and, ASCII only, at 24 for the HUD's numbers and headings. License (both files): the Bitstream Vera
 fonts license (a permissive license: use, copy, modify and redistribute, the fonts not sold by themselves, the name
 not reused for modified fonts), the DejaVu changes in the public domain; the full text is in
 `Engine/SourceArt/EngineFonts/LICENSE.txt`, and [Engine/SourceArt/LICENSES.md](../Engine/SourceArt/LICENSES.md) lists

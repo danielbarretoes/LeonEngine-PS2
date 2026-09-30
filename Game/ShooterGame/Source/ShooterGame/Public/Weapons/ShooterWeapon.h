@@ -60,9 +60,16 @@ class SHOOTERGAME_API AShooterWeapon : public AActor
 public:
 	AShooterWeapon(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** The name the kill feed, the HUD, the buy menu and `give` use (CS's buy names: glock, usp, ak47, awp, ...). */
+	/** The name the kill feed, the buy menu and `give` go by (CS's buy names: glock, usp, ak47, awp, ...). */
 	UPROPERTY(Config)
 	FString WeaponName;
+
+	/**
+	 * The name the player reads (CS's: "AK-47", "Desert Eagle", "HE Grenade"): the HUD, the kill feed, the buy menu and
+	 * the pickup notice (GetItemDisplayName).
+	 */
+	UPROPERTY(Config)
+	FString DisplayName;
 
 	/** The inventory slot (set by each class). */
 	UPROPERTY()
@@ -354,6 +361,12 @@ public:
 	[[nodiscard]] static UClass* FindWeaponClass(const FString& Name);
 	/** Every concrete weapon class, in the order FindWeaponClass lists them (the tests' table). */
 	static void GetWeaponClasses(TArray<UClass*>& OutClasses);
+	/**
+	 * What the player reads for an item's buy name (a weapon's WeaponName, the kill feed's): the weapon's DisplayName,
+	 * the bomb's (c4) "C4", the equipment's ("Kevlar Vest", "Kevlar + Helmet", "Defuse Kit", the ammunition), the
+	 * world's "World"; the name itself for anything else.
+	 */
+	[[nodiscard]] static FString GetItemDisplayName(const FString& ItemName);
 
 	/** Shots fired since it was spawned. */
 	[[nodiscard]] int32 GetShotsFired() const

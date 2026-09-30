@@ -387,7 +387,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameHUDTextCacheTest, "ShooterGame.HUD.
 bool FShooterGameHUDTextCacheTest::RunTest(const FString& Parameters)
 {
 	// The HUD formats a line of text only when what it shows changes: drawn again with nothing changed, it formats
-	// nothing; a new score formats that score's line only, a kill the feed's line.
+	// nothing; a new score formats that score's line only, a kill the feed's names.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	AShooterGameMode* GameMode = SetUpBotMatch(World, 1, 1);
@@ -417,7 +417,7 @@ bool FShooterGameHUDTextCacheTest::RunTest(const FString& Parameters)
 	State->AddKillFeedEntry(Entry);
 	Paint();
 	const int32 AfterKill = HUD->GetNumTextFormats();
-	TestEqual("A kill: its three parts", AfterKill, First + 1 + 3);
+	TestEqual("A kill: its two names", AfterKill, First + 1 + 2);
 	Paint();
 	TestEqual("Then nothing again", HUD->GetNumTextFormats(), AfterKill);
 	return true;

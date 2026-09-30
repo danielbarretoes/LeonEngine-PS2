@@ -429,6 +429,18 @@ Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build
 
 `RunTests.bat` builds and runs it on Win64 (171 tests at 0.24.0). On PS2 (fewer: the desktop-only file, config and log tests stay out; 157 at [ps2-shipping](PLANS/ps2-shipping.md) N15, the last EE run) the verdict (`TestPAL: PASSED (N test(s), 0 failed)`) and the `LogTestPAL` numbers are read from the PCSX2 log; the numbers are recorded in [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md). `RunPCSX2.ps1 -Program VU1Conformance -Build` runs VU1Conformance the same way (`VU1Conformance: PASSED (84 batch(es), 0 failed)`).
 
+## Game captures
+
+A game's captures come from its own switches ([SETUP.md](SETUP.md)): `-Screenshot=<file.bmp>` saves frame
+`-ExitAfterFrames=N`, `-ExecCmds="Cmd;Cmd"` runs console commands on the first frame, and `-ExecCmdsAfterFrames=N`
+([ps2-polish](PLANS/ps2-polish.md) P6, not in Shipping) holds them until frame N, for what only exists once the match
+plays. ShooterGame's buy menu and scoreboard:
+
+```bat
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe "-ExecCmds=bot_fill;buymenu" -ExecCmdsAfterFrames=40 -Screenshot=C:\Temp\buy.bmp -ExitAfterFrames=90
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe "-ExecCmds=bot_fill;ShowScores 1" -ExecCmdsAfterFrames=40 -Screenshot=C:\Temp\scores.bmp -ExitAfterFrames=90
+```
+
 ## Related docs
 
 [SETUP.md](SETUP.md) · [ASSET_FORMATS.md](ASSET_FORMATS.md) · [LEVELS.md](LEVELS.md) · [ART_PIPELINE.md](ART_PIPELINE.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [CODING_STANDARD.md](CODING_STANDARD.md) · [TESTING.md](TESTING.md)

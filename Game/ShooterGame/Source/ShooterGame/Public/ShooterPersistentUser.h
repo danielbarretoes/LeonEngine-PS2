@@ -10,11 +10,12 @@ class AShooterPlayerController;
 /**
  * The player's options, kept between sessions (UE ShooterGame: UShooterPersistentUser; Docs/PLANS/ps2-shipping.md N24):
  * the aim sensitivity (a scale of the mouse's degrees a pixel and of the right stick's turn rates), an inverted Y axis
- * (the mouse and the stick), the sound's volume, the crosshair's colour and how the crouch key works (a toggle or
- * held). They live in the save slot "Settings": Saved/SaveGames/Settings.sav on the desktop, the memory card's
- * ShooterGame folder on the PS2 (UGameplayStatics::SaveGameToSlot). The player controller loads them when its player
- * plays at a screen, applies them, and saves them when a console command changes one (SetSensitivity, SetInvertY,
- * SetVolume, SetCrosshairColor, SetToggleCrouch) or the options page of a menu changes them (ps2-polish P9).
+ * (the mouse and the stick), the sound's volume, the crosshair's colour, how the crouch key works (a toggle or
+ * held) and the HUD's frame readout (SetShowFrameStats). They live in the save slot "Settings":
+ * Saved/SaveGames/Settings.sav on the desktop, the memory card's ShooterGame folder on the PS2
+ * (UGameplayStatics::SaveGameToSlot). The player controller loads them when its player plays at a screen, applies them,
+ * and saves them when a console command changes one (SetSensitivity, SetInvertY, SetVolume, SetCrosshairColor,
+ * SetToggleCrouch) or the options page of a menu changes them (ps2-polish P9).
  *
  * They also keep the main menu's last match (ps2-polish P9): the map, the bots' difficulty, the rounds to win and the
  * number of bots (GetMatchSettings / SetMatchSettings), saved when a match starts from the menu.
@@ -76,4 +77,7 @@ public:
 	/** The last match's settings (its values within the menu's ranges). */
 	[[nodiscard]] FShooterMatchSettings GetMatchSettings() const;
 	void SetMatchSettings(const FShooterMatchSettings& Settings);
+	/** The HUD's compact frame readout under the radar ("30 fps  33.3 ms"; ps2-polish P6), on by default. */
+	UPROPERTY()
+	bool bShowFrameStats = true;
 };

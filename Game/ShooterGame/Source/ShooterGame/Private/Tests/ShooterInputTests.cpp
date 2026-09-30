@@ -238,7 +238,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameInputDropAndPickUpWeaponTest, "Shoo
 bool FShooterGameInputDropAndPickUpWeaponTest::RunTest(const FString& Parameters)
 {
 	// G drops the rifle in hand (and draws the pistol); walking over it with the primary slot free takes it back, with
-	// its rounds and its silencer, not drawn, and the HUD says "Picked up m4a1" for PickupNoticeDuration. With the slot
+	// its rounds and its silencer, not drawn, and the HUD says "Picked up M4A1" for PickupNoticeDuration. With the slot
 	// taken the pawn walks over a weapon and leaves it.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
@@ -276,13 +276,13 @@ bool FShooterGameInputDropAndPickUpWeaponTest::RunTest(const FString& Parameters
 	TestEqual("Its clip", Rifle->GetCurrentAmmoInClip(), Clip);
 	TestEqual("Its reserve", Rifle->GetCurrentAmmo(), Reserve);
 	TestTrue("Its silencer", Rifle->IsSilenced());
-	TestEqual("The notice", Controller.GetPickupMessage(), FString(TEXT("Picked up m4a1")));
+	TestEqual("The notice", Controller.GetPickupMessage(), FString(TEXT("Picked up M4A1")));
 	const AShooterHUD* HUD = Shooter.PaintHUD();
 	if (!TestNotNull("The HUD", HUD))
 	{
 		return false;
 	}
-	TestEqual("The HUD shows it", HUD->GetPickupNoticeText(), FString(TEXT("Picked up m4a1")));
+	TestEqual("The HUD shows it", HUD->GetPickupNoticeText(), FString(TEXT("Picked up M4A1")));
 	TickFrames(World, FramesFor(HUD->PickupNoticeDuration));
 	TestTrue("and then not", Shooter.PaintHUD()->GetPickupNoticeText().IsEmpty());
 

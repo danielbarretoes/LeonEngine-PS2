@@ -80,6 +80,10 @@
 #                                            -> removed in ps2-polish P3: the bots climb (UShooterCharacterMovement::
 #                                               GetLadderNormal, the waypoints' Ladder links) and watch the sites'
 #                                               lookouts (AShooterGameMode::GetBombSiteLookouts)
+#   ShooterGame's hand-drawn scoreboard (AShooterHUD::DrawScoreboard, its space-aligned ScoreboardCTText /
+#   ScoreboardTText lines) and the HUD's C4 / KIT text (ItemsText)
+#                                            -> removed in ps2-polish P6: UShooterScoreboardWidget (UMG's UTableView),
+#                                               the HUD's icons (EShooterHUDIcon, AShooterHUD::DrawHUDIcon)
 #   FLegacyCoordinateConversion and LegacyCoordinateConversion.h
 #                                            -> UE-space data; only tests convert legacy (Y up, metres) data, the
 #                                               golden tables: see $TestsOnly
@@ -186,6 +190,9 @@ $Rules = @(
 	@{ Name = "ShooterGame's bot fill flag and single difficulty scale (ps2-polish P9)"
 		Pattern = '\bbFillTeamsWithBots\b|Max\(0\.1f, Difficulty\)'
 		Use = "AShooterGameMode::NumBots and RebalanceBots (the bots shared out around the player's team); AShooterAIController::ApplyDifficulty with DifficultyPresets (EShooterBotDifficulty)" },
+	@{ Name = "the hand-drawn scoreboard (ps2-polish P6)"
+		Pattern = '\bDrawScoreboard\b|\bScoreboardCTText\b|\bScoreboardTText\b|\bItemsText\b'
+		Use = "UShooterScoreboardWidget (UMG's UTableView); the HUD's icons (EShooterHUDIcon, AShooterHUD::DrawHUDIcon)" },
 	@{ Name = "legacy GL / transform / axes"; Pattern = 'LegacyGL|FLegacyTransform|LegacyAxes'
 		Use = "UE view and projection matrices (ToGLClipSpace last), FTransform, UE axes" },
 	@{ Name = "legacy coordinate conversion outside the tests"

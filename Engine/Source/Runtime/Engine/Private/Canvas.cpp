@@ -250,6 +250,45 @@ void FCanvasTileItem::Draw(FCanvas* InCanvas)
 	InCanvas->GetBatch().Tiles.Add(Tile);
 }
 
+FCanvasTriangleItem::FCanvasTriangleItem(const FVector2D& InPointA, const FVector2D& InPointB,
+	const FVector2D& InPointC, const FVector2D& InTexCoordPointA, const FVector2D& InTexCoordPointB,
+	const FVector2D& InTexCoordPointC, const UTexture* InTexture)
+	: FCanvasItem(FVector2D::ZeroVector)
+	, Texture(InTexture)
+{
+	FCanvasUVTri& Triangle = TriangleList.AddDefaulted_GetRef();
+	Triangle.V0_Pos = InPointA;
+	Triangle.V1_Pos = InPointB;
+	Triangle.V2_Pos = InPointC;
+	Triangle.V0_UV = InTexCoordPointA;
+	Triangle.V1_UV = InTexCoordPointB;
+	Triangle.V2_UV = InTexCoordPointC;
+}
+
+FCanvasTriangleItem::FCanvasTriangleItem(TArrayView<const FCanvasUVTri> InTriangleList, const UTexture* InTexture)
+	: FCanvasItem(FVector2D::ZeroVector)
+	, Texture(InTexture)
+{
+	TriangleList.Append(InTriangleList.GetData(), InTriangleList.Num());
+}
+
+void FCanvasTriangleItem::Draw(FCanvas* InCanvas)
+{
+	if (InCanvas == nullptr || TriangleList.Num() == 0)
+	{
+		return;
+	}
+	// A tile of the batch that stands for the triangles, so they keep their place among the tiles.
+	FCanvas::FBatch& Batch = InCanvas->GetBatch();
+	FCanvas::FTileItem Tile;
+	Tile.Texture = Cast<UTexture2D>(const_cast<UTexture*>(Texture));
+	Tile.Color = SetColorValue;
+	Tile.FirstTriangle = Batch.Triangles.Num();
+	Tile.NumTriangles = TriangleList.Num();
+	Batch.Triangles.Append(TriangleList.GetData(), TriangleList.Num());
+	Batch.Tiles.Add(Tile);
+}
+
 void FCanvasTextItem::Draw(FCanvas* InCanvas)
 {
 	if (InCanvas == nullptr || Text.IsEmpty())
@@ -436,6 +475,29 @@ void FCanvas::DrawItem(FCanvasItem& Item)
 	Item.Draw(this);
 }
 
+FCanvasIcon FCanvas::MakeIcon(const UTexture* Texture, float U, float V, float UL, float VL)
+{
+	FCanvasIcon Icon;
+	Icon.Texture = Texture;
+	Icon.U = U;
+	Icon.V = V;
+	Icon.UL = UL;
+	Icon.VL = VL;
+	return Icon;
+}
+
+void FCanvas::DrawIcon(const FCanvasIcon& Icon, float X, float Y, float Scale, const FLinearColor& Color)
+{
+	const float Width = Icon.Texture != nullptr ? Icon.Texture->GetSurfaceWidth() : 0.0f;
+	const float Height = Icon.Texture != nullptr ? Icon.Texture->GetSurfaceHeight() : 0.0f;
+	if (Width <= 0.0f || Height <= 0.0f)
+	{
+		return;
+	}
+	DrawTile(X, Y, Icon.UL * Scale, Icon.VL * Scale, Icon.U / Width, Icon.V / Height, Icon.UL / Width, Icon.VL / Height,
+		Color, Icon.Texture);
+}
+
 void FCanvas::MeasureText(const UFont* Font, const FString& Text, float& OutWidth, float& OutHeight)
 {
 	const UFont* Measured = GetFontOrDefault(Font);
@@ -474,6 +536,29 @@ void FCanvas::GetPrimitives(TArray<FCanvasVertex>& OutVertices, TArray<FCanvasPr
 			const FCanvasVertex Color = ColorVertex(Tile.Color);
 			const UTexture2D* Texture =
 				Tile.Texture != nullptr && Tile.Texture->HasValidPlatformData() ? Tile.Texture : nullptr;
+			if (Tile.NumTriangles > 0)
+			{
+				// A triangle item: each corner its position, texture coordinates and colour times the item's.
+				Sink.Begin(ECanvasPrimitive::Triangle, Texture, false);
+				for (int32 Index = Tile.FirstTriangle; Index < Tile.FirstTriangle + Tile.NumTriangles; ++Index)
+				{
+					const FCanvasUVTri& Triangle = Batch.Triangles[Index];
+					const FVector2D* Positions[3] = {&Triangle.V0_Pos, &Triangle.V1_Pos, &Triangle.V2_Pos};
+					const FVector2D* UVs[3] = {&Triangle.V0_UV, &Triangle.V1_UV, &Triangle.V2_UV};
+					const FLinearColor* Colors[3] = {&Triangle.V0_Color, &Triangle.V1_Color, &Triangle.V2_Color};
+					for (int32 Corner = 0; Corner < 3; ++Corner)
+					{
+						FCanvasVertex Out = ColorVertex(*Colors[Corner] * Tile.Color);
+						Out.X = Positions[Corner]->X;
+						Out.Y = Positions[Corner]->Y;
+						Out.Z = 0.0f;
+						Out.U = UVs[Corner]->X;
+						Out.V = UVs[Corner]->Y;
+						Sink.Add(Out);
+					}
+				}
+				continue;
+			}
 			if (Tile.Rotation == 0.0f)
 			{
 				// Texels one to one with pixels: sampled nearest.

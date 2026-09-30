@@ -255,7 +255,11 @@ int32 FEngineLoop::Init()
 	GEngine->AddToRoot();
 
 	// -ExecCmds="Cmd1;Cmd2": console commands for the first frame, once the map plays (UE: DeferredCommands; UE
-	// separates them with commas, which Leon accepts too).
+	// separates them with commas, which Leon accepts too). Leon, not in Shipping: -ExecCmdsAfterFrames=N holds them
+	// until frame N, so a capture can open what only exists once the match plays (the buy menu, the scoreboard).
+#if !UE_BUILD_SHIPPING
+	(void)FParse::Value(CmdLine, "ExecCmdsAfterFrames=", ExecCmdsAfterFrames);
+#endif
 	FString ExecCmds;
 	if (FParse::Value(CmdLine, "ExecCmds=", ExecCmds, false))
 	{
@@ -267,7 +271,7 @@ int32 FEngineLoop::Init()
 			const FString Trimmed = Command.TrimStartAndEnd();
 			if (!Trimmed.IsEmpty())
 			{
-				GEngine->DeferredCommands.Add(Trimmed);
+				(ExecCmdsAfterFrames > 1 ? DelayedCommands : GEngine->DeferredCommands).Add(Trimmed);
 			}
 		}
 	}
@@ -317,6 +321,12 @@ void FEngineLoop::Tick()
 	if (MainWindow)
 	{
 		MainWindow->PollEvents();
+	}
+	// -ExecCmdsAfterFrames=N: the held -ExecCmds run at the start of frame N.
+	if (DelayedCommands.Num() > 0 && FrameCount + 1 >= ExecCmdsAfterFrames)
+	{
+		GEngine->DeferredCommands.Append(DelayedCommands);
+		DelayedCommands.Reset();
 	}
 	GEngine->TickDeferredCommands();
 

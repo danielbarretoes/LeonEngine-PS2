@@ -7,19 +7,25 @@
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/TableView.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
+#include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "GameFramework/GameModeBase.h"
+#include "Misc/App.h"
 #include "ShooterBomb.h"
 #include "ShooterCharacter.h"
 #include "ShooterGameMode.h"
 #include "ShooterGameState.h"
 #include "ShooterPlayerController.h"
 #include "ShooterPlayerState.h"
+#include "ShooterScoreboardWidget.h"
 #include "Weapons/ShooterWeapon.h"
 #include "Weapons/ShooterWeapon_AWP.h"
 #include "Weapons/ShooterWeapon_Instant.h"
@@ -32,29 +38,32 @@ namespace
 	const FLinearColor MessageColor(1.0f, 1.0f, 1.0f);
 	const FLinearColor BombColor(1.0f, 0.25f, 0.2f);
 	const FLinearColor RefusalColor(1.0f, 0.3f, 0.2f);
+	const FLinearColor LowHealthColor(1.0f, 0.2f, 0.15f);
+	const FLinearColor MoneyColor(0.55f, 0.9f, 0.35f);
+	const FLinearColor BuyZoneColor(0.35f, 0.9f, 0.3f);
+	const FLinearColor BombIconColor(0.3f, 0.9f, 0.3f);
+	const FLinearColor KillIconColor(0.95f, 0.9f, 0.8f);
+	const FLinearColor HeadshotIconColor(1.0f, 0.35f, 0.25f);
+	const FLinearColor KillFeedBandColor(0.0f, 0.0f, 0.0f, 0.4f);
+	/** The drop shadow of the text and the icons over the world, a pixel down and right: readable on a bright sky. */
+	const FLinearColor TextShadowColor(0.0f, 0.0f, 0.0f, 1.0f);
+	const FLinearColor IconShadowColor(0.0f, 0.0f, 0.0f, 0.85f);
+	const FLinearColor FrameStatsColor(0.85f, 0.85f, 0.85f);
 
-	/** The HUD's font: the engine's small font (DejaVu Sans Condensed, 14 pixels). */
-	const UFont* HUDFont()
-	{
-		return UEngine::GetSmallFont();
-	}
-
-	/** A line of the HUD font, pixels. */
-	float HUDLineHeight()
-	{
-		const UFont* Font = HUDFont();
-		return Font != nullptr ? Font->GetLineHeight() : 0.0f;
-	}
-
-	/** The HUD's layout on the 640 x 448 canvas, in lines of the HUD font (HUDLineHeight). */
+	/** The HUD's layout on the 640 x 448 canvas, pixels. */
 	constexpr float EdgeMargin = 12.0f;
-	float LineStep()
-	{
-		return HUDLineHeight() + 4.0f;
-	}
+	/** The status icons' side, and the space between an icon and its number. */
+	constexpr float StatusIconSize = 24.0f;
+	constexpr float IconGap = 4.0f;
+	/** The armor's column from the left margin (after the health's three digits). */
+	constexpr float ArmorColumn = 96.0f;
+	/** The health at or under which it shows red. */
+	constexpr int32 LowHealth = 25;
+	/** How far from the centre the scores sit, either side of the clock. */
+	constexpr float ScoreGap = 64.0f;
 
-	/** The buy menu's panel's top-left corner on the canvas (the refusal is drawn there too), below the radar. */
-	constexpr float BuyMenuTop = 112.0f;
+	/** The buy menu's panel's left edge on the canvas (the refusal and the radio menu are drawn there too). */
+	constexpr float BuyMenuLeft = 24.0f;
 
 	/** The radar's colours, its view cone's arms (pixels) and the bomb sites it shows. */
 	const FLinearColor RadarBorderColor(0.45f, 0.45f, 0.45f);
@@ -70,9 +79,85 @@ namespace
 	constexpr int32 DamageIndicatorSegments = 4;
 	constexpr float DamageIndicatorThickness = 4.0f;
 
+	/** The atlas's rectangles (SourceArt/UI/make_hud_icons.py's ICONS), in EShooterHUDIcon's order, texels. */
+	struct FIconRect
+	{
+		float U;
+		float V;
+		float UL;
+		float VL;
+	};
+	constexpr FIconRect IconRects[] = {
+		{0.0f, 0.0f, 48.0f, 16.0f}, // AK47
+		{48.0f, 0.0f, 48.0f, 16.0f}, // M4A1
+		{96.0f, 0.0f, 48.0f, 16.0f}, // AWP
+		{144.0f, 0.0f, 48.0f, 16.0f}, // MP5
+		{192.0f, 0.0f, 32.0f, 16.0f}, // Glock
+		{224.0f, 0.0f, 32.0f, 16.0f}, // USP
+		{0.0f, 16.0f, 32.0f, 16.0f}, // Deagle
+		{32.0f, 16.0f, 40.0f, 16.0f}, // Knife
+		{72.0f, 16.0f, 16.0f, 16.0f}, // HEGrenade
+		{88.0f, 16.0f, 16.0f, 16.0f}, // Flashbang
+		{104.0f, 16.0f, 16.0f, 16.0f}, // SmokeGrenade
+		{120.0f, 16.0f, 24.0f, 16.0f}, // C4
+		{144.0f, 16.0f, 16.0f, 16.0f}, // World
+		{160.0f, 16.0f, 16.0f, 16.0f}, // Headshot
+		{0.0f, 32.0f, 24.0f, 24.0f}, // Health
+		{24.0f, 32.0f, 24.0f, 24.0f}, // Armor
+		{48.0f, 32.0f, 24.0f, 24.0f}, // ArmorHelmet
+		{72.0f, 32.0f, 24.0f, 24.0f}, // BuyZone
+		{96.0f, 32.0f, 24.0f, 24.0f}, // Bomb
+		{120.0f, 32.0f, 24.0f, 24.0f}, // Defuser
+		{144.0f, 32.0f, 24.0f, 24.0f}, // Clock
+	};
+	static_assert(UE_ARRAY_COUNT(IconRects) == static_cast<int32>(EShooterHUDIcon::Num), "An icon a rectangle");
+
+	/** The kill feed's weapons by their buy names. */
+	struct FKillIconName
+	{
+		const TCHAR* WeaponName;
+		EShooterHUDIcon Icon;
+	};
+	constexpr FKillIconName KillIconNames[] = {
+		{TEXT("ak47"), EShooterHUDIcon::AK47},
+		{TEXT("m4a1"), EShooterHUDIcon::M4A1},
+		{TEXT("awp"), EShooterHUDIcon::AWP},
+		{TEXT("mp5"), EShooterHUDIcon::MP5},
+		{TEXT("glock"), EShooterHUDIcon::Glock},
+		{TEXT("usp"), EShooterHUDIcon::USP},
+		{TEXT("deagle"), EShooterHUDIcon::Deagle},
+		{TEXT("knife"), EShooterHUDIcon::Knife},
+		{TEXT("hegrenade"), EShooterHUDIcon::HEGrenade},
+		{TEXT("flashbang"), EShooterHUDIcon::Flashbang},
+		{TEXT("smokegrenade"), EShooterHUDIcon::SmokeGrenade},
+		{TEXT("c4"), EShooterHUDIcon::C4},
+	};
+
 	FColor GetTeamColor(EShooterTeam Team)
 	{
 		return Team == EShooterTeam::T ? TColor : Team == EShooterTeam::CT ? CTColor : FColor::White;
+	}
+
+	/** A byte colour as the canvas takes it (FCanvas::DrawText's FColor overload: no sRGB curve). */
+	FLinearColor ToLinear(const FColor& Color)
+	{
+		return FLinearColor(float(Color.R) / 255.0f, float(Color.G) / 255.0f, float(Color.B) / 255.0f, 1.0f);
+	}
+
+	/** A font's line, pixels (0 without it). */
+	float LineHeightOf(const UFont* Font)
+	{
+		return Font != nullptr ? Font->GetLineHeight() : 0.0f;
+	}
+
+	/** A line of the HUD's text font, and the step between two. */
+	float HUDLineHeight()
+	{
+		return LineHeightOf(AShooterHUD::GetTextFont());
+	}
+	float LineStep()
+	{
+		return HUDLineHeight() + 4.0f;
 	}
 
 	/** The whole seconds a clock shows (it rounds up). */
@@ -123,27 +208,25 @@ namespace
 		OutRight = (DeltaY * Cos) - (DeltaX * Sin);
 	}
 
-	/** A kept line centred on X. */
-	void DrawCentredText(FCanvas& Canvas, const FShooterHUDText& Line, float X, float Y, const FLinearColor& Color)
+	/** The labels drawn every frame, made once (a frame's HUD allocates nothing). */
+	const FString& CTLabel()
 	{
-		Canvas.DrawText(HUDFont(), Line.Text, X - (Line.Width * 0.5f), Y, Color);
+		static const FString Label(TEXT("CT"));
+		return Label;
 	}
-
-	/** A text centred on X (measured now: the lines that change with the round's events). */
-	void DrawCentredText(FCanvas& Canvas, const FString& Text, float X, float Y, const FLinearColor& Color)
+	const FString& TLabel()
 	{
-		float Width = 0.0f;
-		float Height = 0.0f;
-		FCanvas::MeasureText(HUDFont(), Text, Width, Height);
-		Canvas.DrawText(HUDFont(), Text, X - (Width * 0.5f), Y, Color);
+		static const FString Label(TEXT("T"));
+		return Label;
 	}
 
 } // namespace
 
-void FShooterHUDText::Set(const FString& InText)
+void FShooterHUDText::Set(const FString& InText, const UFont* InFont)
 {
 	Text = InText;
-	FCanvas::MeasureText(HUDFont(), Text, Width, Height);
+	Font = InFont;
+	FCanvas::MeasureText(InFont != nullptr ? InFont : AShooterHUD::GetTextFont(), Text, Width, Height);
 	bFormatted = true;
 }
 
@@ -155,7 +238,11 @@ AShooterHUD::AShooterHUD(const FObjectInitializer& ObjectInitializer)
 void AShooterHUD::BeginPlay()
 {
 	Super::BeginPlay();
+	IconsTexture = LoadShooterAsset<UTexture2D>(IconsTextureName);
+	NumberFont = LoadShooterAsset<UFont>(NumberFontName);
+	BoldFont = LoadShooterAsset<UFont>(BoldFontName);
 	(void)AddWidget<UShooterBuyMenuWidget>();
+	ScoreboardWidget = AddWidget<UShooterScoreboardWidget>();
 }
 
 float AShooterHUD::GetWorldTime() const
@@ -181,6 +268,114 @@ AShooterGameState* AShooterHUD::GetShooterGameState() const
 	return GameMode != nullptr ? GameMode->GetGameState<AShooterGameState>() : nullptr;
 }
 
+const UFont* AShooterHUD::GetTextFont()
+{
+	return UEngine::GetSmallFont();
+}
+
+const UFont* AShooterHUD::GetNumberFont() const
+{
+	return NumberFont != nullptr ? NumberFont : UEngine::GetMediumFont();
+}
+
+const UFont* AShooterHUD::GetBoldFont() const
+{
+	return BoldFont != nullptr ? BoldFont : UEngine::GetSmallFont();
+}
+
+void AShooterHUD::GetIconRect(EShooterHUDIcon Icon, float& OutU, float& OutV, float& OutUL, float& OutVL)
+{
+	const int32 Index = FMath::Clamp(static_cast<int32>(Icon), 0, static_cast<int32>(EShooterHUDIcon::Num) - 1);
+	const FIconRect& Rect = IconRects[Index];
+	OutU = Rect.U;
+	OutV = Rect.V;
+	OutUL = Rect.UL;
+	OutVL = Rect.VL;
+}
+
+EShooterHUDIcon AShooterHUD::GetKillFeedIcon(const FString& WeaponName)
+{
+	for (const FKillIconName& Entry : KillIconNames)
+	{
+		if (WeaponName.Equals(Entry.WeaponName, ESearchCase::IgnoreCase))
+		{
+			return Entry.Icon;
+		}
+	}
+	return EShooterHUDIcon::World;
+}
+
+FCanvasIcon AShooterHUD::MakeHUDIcon(EShooterHUDIcon Icon) const
+{
+	float U = 0.0f;
+	float V = 0.0f;
+	float UL = 0.0f;
+	float VL = 0.0f;
+	GetIconRect(Icon, U, V, UL, VL);
+	return FCanvas::MakeIcon(IconsTexture, U, V, UL, VL);
+}
+
+void AShooterHUD::DrawHUDIcon(EShooterHUDIcon Icon, float X, float Y, const FLinearColor& Color)
+{
+	if (IconsTexture != nullptr)
+	{
+		// Its shadow first, as the text's: the icon stays readable on a bright sky.
+		const FCanvasIcon CanvasIcon = MakeHUDIcon(Icon);
+		const float Left = FMath::RoundToFloat(X);
+		const float Top = FMath::RoundToFloat(Y);
+		Canvas->DrawIcon(CanvasIcon, Left + 1.0f, Top + 1.0f, 1.0f, IconShadowColor);
+		Canvas->DrawIcon(CanvasIcon, Left, Top, 1.0f, Color);
+	}
+}
+
+float AShooterHUD::GetMenuTop() const
+{
+	// Under the radar and the frame readout's line.
+	return EdgeMargin + FMath::Max(0.0f, RadarSize) + 8.0f + HUDLineHeight() + 8.0f;
+}
+
+void AShooterHUD::DrawFrameStats()
+{
+	// The frames' real time (FApp's), averaged over FrameStatsRefreshSeconds and formatted then.
+	FrameStatsSeconds += FApp::GetDeltaTime();
+	++FrameStatsFrames;
+	if (FrameStatsSeconds >= double(FrameStatsRefreshSeconds) && FrameStatsFrames > 0)
+	{
+		const double Milliseconds = (FrameStatsSeconds * 1000.0) / double(FrameStatsFrames);
+		const double Fps = double(FrameStatsFrames) / FrameStatsSeconds;
+		FrameStatsText.Set(FString::Printf(TEXT("%.0f fps  %.1f ms"), Fps, Milliseconds));
+		++NumTextFormats;
+		FrameStatsFrames = 0;
+		FrameStatsSeconds = 0.0;
+	}
+	const AShooterPlayerController* Controller = GetShooterPlayerController();
+	bFrameStatsShown = Controller != nullptr && Controller->IsFrameStatsShown() && !FrameStatsText.Text.IsEmpty();
+	if (bFrameStatsShown)
+	{
+		DrawHUDText(FrameStatsText, EdgeMargin, EdgeMargin + FMath::Max(0.0f, RadarSize) + 6.0f, FrameStatsColor);
+	}
+}
+
+void AShooterHUD::DrawHUDText(
+	const UFont* Font, const FString& Text, float X, float Y, const FLinearColor& Color, ETextJustify Justify)
+{
+	Canvas->DrawText(Font, Text, X, Y, Color, Justify, FVector2D(1.0f, 1.0f), TextShadowColor);
+}
+
+void AShooterHUD::DrawHUDText(
+	const FShooterHUDText& Line, float X, float Y, const FLinearColor& Color, ETextJustify Justify)
+{
+	if (!Line.Text.IsEmpty())
+	{
+		DrawHUDText(Line.Font != nullptr ? Line.Font : GetTextFont(), Line.Text, X, Y, Color, Justify);
+	}
+}
+
+float AShooterHUD::GetBottomRowY() const
+{
+	return static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - LineHeightOf(GetNumberFont());
+}
+
 void AShooterHUD::DrawHUD()
 {
 	Super::DrawHUD();
@@ -199,6 +394,8 @@ void AShooterHUD::DrawHUD()
 	DrawHitMarker();
 	DrawDamageIndicator();
 	DrawStatus();
+	DrawWeaponAndMoney();
+	DrawStatusIcons();
 	DrawRoundInfo();
 	DrawKillFeed();
 	DrawRadio();
@@ -208,17 +405,8 @@ void AShooterHUD::DrawHUD()
 	DrawRadioMenu();
 	DrawProgress();
 	DrawSpectatorInfo();
-	const AShooterPlayerController* Controller = GetShooterPlayerController();
-	// The scoreboard covers the radar's corner.
-	if (Controller != nullptr && Controller->IsScoreboardShown())
-	{
-		NumRadarPrimitives = 0;
-		DrawScoreboard();
-	}
-	else
-	{
-		DrawRadar();
-	}
+	DrawRadar();
+	DrawFrameStats();
 }
 
 FVector2D AShooterHUD::ProjectToRadar(
@@ -313,7 +501,7 @@ void AShooterHUD::DrawRadar()
 		constexpr float LetterHalfWidth = 3.0f;
 		const FVector2D Offset =
 			ProjectToRadar(Origin, Yaw, SiteLocation, RadarRange, HalfSize - HUDLineHeight() * 0.5f);
-		Canvas->DrawText(HUDFont(), RadarSiteLabels[Index], CenterX + Offset.X - LetterHalfWidth,
+		Canvas->DrawText(GetTextFont(), RadarSiteLabels[Index], CenterX + Offset.X - LetterHalfWidth,
 			CenterY + Offset.Y - (HUDLineHeight() * 0.5f), RadarSiteColor);
 		++NumRadarPrimitives;
 	}
@@ -438,92 +626,127 @@ void AShooterHUD::DrawSpectatorInfo()
 	}
 	const float CenterX = static_cast<float>(Canvas->GetSizeX()) * 0.5f;
 	const float Y = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HUDLineHeight();
-	DrawCentredText(*Canvas, SpectatorText, CenterX, Y, MessageColor);
+	DrawHUDText(SpectatorText, CenterX, Y, MessageColor, ETextJustify::Center);
 }
 
 void AShooterHUD::DrawStatus()
 {
 	const AShooterCharacter* Pawn = GetViewedPawn();
-	const AShooterPlayerState* State =
-		PlayerOwner != nullptr ? PlayerOwner->GetPlayerState<AShooterPlayerState>() : nullptr;
-	const float Width = static_cast<float>(Canvas->GetSizeX());
-	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HUDLineHeight();
-	if (State != nullptr && GetShooterGameState() != nullptr)
-	{
-		const int32 Money = State->GetMoney();
-		UpdateText(MoneyText, MakeKey(Money), [Money]() { return FString::Printf(TEXT("$ %d"), Money); });
-		Canvas->DrawText(HUDFont(), MoneyText.Text, EdgeMargin, Bottom - LineStep(), StatusColor);
-	}
 	if (Pawn == nullptr)
 	{
 		return;
 	}
+	const UFont* Numbers = GetNumberFont();
+	const float Row = GetBottomRowY();
+	const float IconY = Row + FMath::RoundToFloat((LineHeightOf(Numbers) - StatusIconSize) * 0.5f);
+	// The health: a cross and the number, red when low (CS).
 	const int32 Health = FMath::CeilToInt(Pawn->GetHealth());
-	const bool bArmor = Pawn->GetArmor() > 0.0f;
-	const int32 Armor = bArmor ? FMath::CeilToInt(Pawn->GetArmor()) : -1;
-	const bool bHelmet = bArmor && Pawn->HasHelmet();
-	UpdateText(StatusText, MakeKey(Health, Armor, bHelmet ? 1 : 0),
-		[Health, bArmor, Armor, bHelmet]()
-		{
-			FString Status = FString::Printf(TEXT("+ %d"), Health);
-			if (bArmor)
-			{
-				Status += FString::Printf(TEXT("   [] %d%s"), Armor, bHelmet ? TEXT(" H") : TEXT(""));
-			}
-			return Status;
-		});
-	Canvas->DrawText(HUDFont(), StatusText.Text, EdgeMargin, Bottom, StatusColor);
-	const AShooterWeapon* Weapon = Pawn->GetWeapon();
-	const int32 Clip = Weapon != nullptr ? Weapon->GetCurrentAmmoInClip() : 0;
-	const int32 Reserve = Weapon != nullptr ? Weapon->GetCurrentAmmo() : 0;
-	const AShooterWeapon_Instant* InstantWeapon = Cast<AShooterWeapon_Instant>(Weapon);
-	const int32 WeaponMode = Pawn->IsBombDrawn() ? 3
-		: InstantWeapon == nullptr               ? 0
-		: InstantWeapon->IsSilenced()            ? 1
-		: InstantWeapon->IsBurstMode()           ? 2
-												 : 0;
-	UpdateText(WeaponText, MakeKey(ToKey(Weapon), Clip, Reserve, WeaponMode),
-		[Weapon, Clip, Reserve, WeaponMode]()
-		{
-			// The C4 drawn (CS's slot 5): no weapon in hand.
-			if (WeaponMode == 3)
-			{
-				return FString(TEXT("C4"));
-			}
-			if (Weapon == nullptr)
-			{
-				return FString();
-			}
-			// The silencer and the burst mode show after the name (CS: the USP-S, the Glock's burst).
-			const TCHAR* Mode = WeaponMode == 1 ? TEXT(" (silenced)") : WeaponMode == 2 ? TEXT(" (burst)") : TEXT("");
-			return Weapon->AmmoPerClip > 1 || Weapon->MaxAmmo > 0
-				? FString::Printf(TEXT("%s%s  %d | %d"), *Weapon->WeaponName, Mode, Clip, Reserve)
-				: Weapon->WeaponName;
-		});
-	const bool bBomb = Pawn->GetCarriedBomb() != nullptr;
-	const bool bKit = Pawn->HasDefuseKit();
-	UpdateText(ItemsText, MakeKey(bBomb ? 1 : 0, bKit ? 1 : 0),
-		[bBomb, bKit]()
-		{
-			FString Items;
-			if (bBomb)
-			{
-				Items += TEXT("C4 ");
-			}
-			if (bKit)
-			{
-				Items += TEXT("KIT ");
-			}
-			return Items;
-		});
-	if (!WeaponText.Text.IsEmpty())
+	UpdateText(HealthText, MakeKey(Health), [Health]() { return FString::FromInt(Health); }, Numbers);
+	const FLinearColor& HealthColor = Health <= LowHealth ? LowHealthColor : StatusColor;
+	DrawHUDIcon(EShooterHUDIcon::Health, EdgeMargin, IconY, HealthColor);
+	DrawHUDText(HealthText, EdgeMargin + StatusIconSize + IconGap, Row, HealthColor);
+	// The armor: a vest, with a helmet when it has one, and its points (0 without any, as CS shows it).
+	const int32 Armor = FMath::CeilToInt(FMath::Max(0.0f, Pawn->GetArmor()));
+	const bool bHelmet = Armor > 0 && Pawn->HasHelmet();
+	UpdateText(ArmorText, MakeKey(Armor), [Armor]() { return FString::FromInt(Armor); }, Numbers);
+	const float ArmorX = EdgeMargin + ArmorColumn;
+	DrawHUDIcon(bHelmet ? EShooterHUDIcon::ArmorHelmet : EShooterHUDIcon::Armor, ArmorX, IconY, StatusColor);
+	DrawHUDText(ArmorText, ArmorX + StatusIconSize + IconGap, Row, StatusColor);
+}
+
+void AShooterHUD::DrawWeaponAndMoney()
+{
+	const AShooterCharacter* Pawn = GetViewedPawn();
+	const AShooterPlayerState* State =
+		PlayerOwner != nullptr ? PlayerOwner->GetPlayerState<AShooterPlayerState>() : nullptr;
+	const UFont* Numbers = GetNumberFont();
+	const float NumberLine = LineHeightOf(Numbers);
+	const float Right = static_cast<float>(Canvas->GetSizeX()) - EdgeMargin;
+	// From the bottom up: the ammunition, the weapon's name, the money.
+	float Top = GetBottomRowY() + NumberLine;
+	if (Pawn != nullptr)
 	{
-		Canvas->DrawText(HUDFont(), WeaponText.Text, Width - WeaponText.Width - EdgeMargin, Bottom, StatusColor);
+		const AShooterWeapon* Weapon = Pawn->GetWeapon();
+		const int32 Clip = Weapon != nullptr ? Weapon->GetCurrentAmmoInClip() : 0;
+		const int32 Reserve = Weapon != nullptr ? Weapon->GetCurrentAmmo() : 0;
+		const AShooterWeapon_Instant* InstantWeapon = Cast<AShooterWeapon_Instant>(Weapon);
+		const int32 WeaponMode = Pawn->IsBombDrawn() ? 3
+			: InstantWeapon == nullptr               ? 0
+			: InstantWeapon->IsSilenced()            ? 1
+			: InstantWeapon->IsBurstMode()           ? 2
+													 : 0;
+		const bool bCounted = WeaponMode != 3 && Weapon != nullptr && (Weapon->AmmoPerClip > 1 || Weapon->MaxAmmo > 0);
+		UpdateText(
+			AmmoText, MakeKey(ToKey(Weapon), Clip, Reserve, bCounted ? 1 : 0), [bCounted, Clip, Reserve]()
+			{ return bCounted ? FString::Printf(TEXT("%d | %d"), Clip, Reserve) : FString(); }, Numbers);
+		UpdateText(WeaponText, MakeKey(ToKey(Weapon), WeaponMode),
+			[Weapon, WeaponMode]()
+			{
+				// The C4 drawn (CS's slot 5): no weapon in hand.
+				if (WeaponMode == 3)
+				{
+					return FString(TEXT("C4"));
+				}
+				if (Weapon == nullptr)
+				{
+					return FString();
+				}
+				// The silencer and the burst mode show after the name (CS: the USP-S, the Glock's burst).
+				const TCHAR* Mode = WeaponMode == 1 ? TEXT(" (silenced)")
+					: WeaponMode == 2               ? TEXT(" (burst)")
+													: TEXT("");
+				const FString& Name = Weapon->DisplayName.IsEmpty() ? Weapon->WeaponName : Weapon->DisplayName;
+				return Name + Mode;
+			});
+		if (!AmmoText.Text.IsEmpty())
+		{
+			Top -= NumberLine;
+			DrawHUDText(AmmoText, Right, Top, StatusColor, ETextJustify::Right);
+		}
+		if (!WeaponText.Text.IsEmpty())
+		{
+			Top -= AmmoText.Text.IsEmpty() ? NumberLine : WeaponText.Height;
+			DrawHUDText(WeaponText, Right, AmmoText.Text.IsEmpty() ? Top + NumberLine - WeaponText.Height : Top,
+				StatusColor, ETextJustify::Right);
+		}
 	}
-	if (!ItemsText.Text.IsEmpty())
+	if (State == nullptr || GetShooterGameState() == nullptr)
 	{
-		Canvas->DrawText(
-			HUDFont(), ItemsText.Text, Width - ItemsText.Width - EdgeMargin, Bottom - LineStep(), BombColor);
+		return;
+	}
+	// The money, and the buy zone's cart while the player may buy (CS's buy icon).
+	const int32 Money = State->GetMoney();
+	UpdateText(MoneyText, MakeKey(Money), [Money]() { return FString::Printf(TEXT("$ %d"), Money); }, Numbers);
+	Top -= NumberLine + 2.0f;
+	DrawHUDText(MoneyText, Right, Top, MoneyColor, ETextJustify::Right);
+	const UWorld* World = GetWorld();
+	const AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
+	if (Pawn != nullptr && GameMode != nullptr && Pawn->IsAlive() && GameMode->CanBuy(*Pawn))
+	{
+		DrawHUDIcon(EShooterHUDIcon::BuyZone, Right - MoneyText.Width - IconGap - StatusIconSize,
+			Top + FMath::RoundToFloat((NumberLine - StatusIconSize) * 0.5f), BuyZoneColor);
+	}
+}
+
+void AShooterHUD::DrawStatusIcons()
+{
+	const AShooterCharacter* Pawn = GetViewedPawn();
+	if (Pawn == nullptr || !Pawn->IsAlive())
+	{
+		return;
+	}
+	float Y = FMath::RoundToFloat(static_cast<float>(Canvas->GetSizeY()) * 0.45f);
+	if (Pawn->GetCarriedBomb() != nullptr)
+	{
+		// CS: the C4's icon blinks red while its carrier stands in a bomb site.
+		const bool bInSite = Pawn->GetBombSiteHere() != NAME_None;
+		const bool bBlink = bInSite && FMath::FloorToInt(GetWorldTime() * 2.0f) % 2 == 0;
+		DrawHUDIcon(EShooterHUDIcon::Bomb, EdgeMargin, Y, bBlink ? BombColor : BombIconColor);
+		Y += StatusIconSize + IconGap;
+	}
+	if (Pawn->HasDefuseKit())
+	{
+		DrawHUDIcon(EShooterHUDIcon::Defuser, EdgeMargin, Y, BombIconColor);
 	}
 }
 
@@ -534,6 +757,8 @@ void AShooterHUD::DrawRoundInfo()
 	{
 		return;
 	}
+	const UFont* Numbers = GetNumberFont();
+	const float NumberLine = LineHeightOf(Numbers);
 	const float CenterX = static_cast<float>(Canvas->GetSizeX()) * 0.5f;
 	const float Now = GetWorldTime();
 	// The clock: C4 once planted, else the phase's seconds (formatted once a second).
@@ -541,7 +766,8 @@ void AShooterHUD::DrawRoundInfo()
 	const bool bTimed =
 		State->GetRoundState() == EShooterRoundState::Freeze || State->GetRoundState() == EShooterRoundState::Live;
 	const int32 Seconds = bTimed ? GetClockSeconds(State->GetPhaseTimeRemaining(Now)) : 0;
-	UpdateText(ClockText,
+	UpdateText(
+		ClockText,
 		MakeKey(bPlanted ? 1
 				: bTimed ? 2
 						 : 0,
@@ -549,33 +775,50 @@ void AShooterHUD::DrawRoundInfo()
 		[bPlanted, bTimed, Seconds]()
 		{ return bPlanted ? FString(TEXT("C4"))
 			  : bTimed    ? FormatClock(Seconds)
-						  : FString(); });
+						  : FString(); }, Numbers);
 	if (!ClockText.Text.IsEmpty())
 	{
-		DrawCentredText(*Canvas, ClockText, CenterX, EdgeMargin, bPlanted ? BombColor : StatusColor);
+		const FLinearColor& ClockColor = bPlanted ? BombColor : StatusColor;
+		DrawHUDText(ClockText, CenterX, EdgeMargin, ClockColor, ETextJustify::Center);
+		DrawHUDIcon(bPlanted ? EShooterHUDIcon::Bomb : EShooterHUDIcon::Clock,
+			CenterX - (ClockText.Width * 0.5f) - IconGap - StatusIconSize,
+			EdgeMargin + FMath::RoundToFloat((NumberLine - StatusIconSize) * 0.5f), ClockColor);
 	}
-	// The scores either side of the clock, CT's ending and T's starting a clock's width away from the centre.
+	// The scores either side of the clock, each team's name beside its own (CT's ends, T's starts, ScoreGap away).
 	const int32 ScoreCT = State->GetTeamScore(EShooterTeam::CT);
 	const int32 ScoreT = State->GetTeamScore(EShooterTeam::T);
 	const int32 RoundNumber = State->GetRoundNumber();
-	UpdateText(CTScoreText, MakeKey(ScoreCT), [ScoreCT]() { return FString::Printf(TEXT("CT %d"), ScoreCT); });
-	UpdateText(TScoreText, MakeKey(ScoreT), [ScoreT]() { return FString::Printf(TEXT("%d T"), ScoreT); });
+	UpdateText(CTScoreText, MakeKey(ScoreCT), [ScoreCT]() { return FString::FromInt(ScoreCT); }, Numbers);
+	UpdateText(TScoreText, MakeKey(ScoreT), [ScoreT]() { return FString::FromInt(ScoreT); }, Numbers);
 	UpdateText(
 		RoundText, MakeKey(RoundNumber), [RoundNumber]() { return FString::Printf(TEXT("Round %d"), RoundNumber); });
-	constexpr float ScoreGap = 40.0f;
-	Canvas->DrawText(HUDFont(), CTScoreText.Text, CenterX - ScoreGap - CTScoreText.Width, EdgeMargin, CTColor);
-	Canvas->DrawText(HUDFont(), TScoreText.Text, CenterX + ScoreGap, EdgeMargin, TColor);
-	DrawCentredText(*Canvas, RoundText, CenterX, EdgeMargin + LineStep(), FLinearColor(0.7f, 0.7f, 0.7f));
+	const FLinearColor CTLinear = ToLinear(CTColor);
+	const FLinearColor TLinear = ToLinear(TColor);
+	const UFont* Bold = GetBoldFont();
+	// A dark band under the block, so the teams' colours read on a bright sky too.
+	constexpr float LabelRoom = 24.0f;
+	const float HalfBand = ScoreGap + FMath::Max(CTScoreText.Width, TScoreText.Width) + IconGap + LabelRoom;
+	Canvas->DrawTile(
+		CenterX - HalfBand, EdgeMargin - 3.0f, 2.0f * HalfBand, NumberLine + HUDLineHeight() + 4.0f, KillFeedBandColor);
+	// The names sit on the numbers' baseline: their lines' bottoms level.
+	const float LabelY = EdgeMargin + NumberLine - LineHeightOf(Bold) - 2.0f;
+	DrawHUDText(CTScoreText, CenterX - ScoreGap, EdgeMargin, CTLinear, ETextJustify::Right);
+	DrawHUDText(
+		Bold, CTLabel(), CenterX - ScoreGap - CTScoreText.Width - IconGap, LabelY, CTLinear, ETextJustify::Right);
+	DrawHUDText(TScoreText, CenterX + ScoreGap, EdgeMargin, TLinear);
+	DrawHUDText(Bold, TLabel(), CenterX + ScoreGap + TScoreText.Width + IconGap, LabelY, TLinear);
+	DrawHUDText(RoundText, CenterX, EdgeMargin + NumberLine, FLinearColor(0.85f, 0.85f, 0.85f), ETextJustify::Center);
 }
 
 void AShooterHUD::DrawKillFeed()
 {
+	NumKillFeedLinesDrawn = 0;
 	const AShooterGameState* State = GetShooterGameState();
 	if (State == nullptr)
 	{
 		return;
 	}
-	const float Width = static_cast<float>(Canvas->GetSizeX());
+	const float Right = static_cast<float>(Canvas->GetSizeX()) - EdgeMargin;
 	const float Now = GetWorldTime();
 	// Below the engine's stats (top right) when they show.
 	float Y = EdgeMargin;
@@ -583,7 +826,7 @@ void AShooterHUD::DrawKillFeed()
 	{
 		Y = FMath::Max(Y, GEngine->GetDebugOverlay().GetRightTextBottom() + 4.0f);
 	}
-	// The lines are formatted and measured when the feed changes (a kill), not every frame.
+	// The names are formatted and measured when the feed changes (a kill), not every frame.
 	const TArray<FShooterKillFeedEntry>& Feed = State->GetKillFeed();
 	if (State->GetKillFeedSerial() != KillFeedSerial || KillFeedLines.Num() != Feed.Num())
 	{
@@ -594,12 +837,16 @@ void AShooterHUD::DrawKillFeed()
 			const FShooterKillFeedEntry& Entry = Feed[Index];
 			FKillFeedLine& Line = KillFeedLines[Index];
 			Line.Killer.Set(Entry.KillerName);
-			Line.Middle.Set(
-				FString::Printf(TEXT(" [%s%s] "), *Entry.WeaponName, Entry.bHeadshot ? TEXT(" HS") : TEXT("")));
 			Line.Victim.Set(Entry.VictimName);
-			NumTextFormats += 3;
+			Line.Icon = GetKillFeedIcon(Entry.WeaponName);
+			Line.bHeadshot = Entry.bHeadshot;
+			NumTextFormats += 2;
 		}
 	}
+	// A line: the killer, the weapon's icon (and the headshot's), the victim, on a dark band (CS's d_ sprites).
+	constexpr float Space = 5.0f;
+	constexpr float BandPadding = 2.0f;
+	const float TextLine = HUDLineHeight();
 	for (int32 Index = 0; Index < Feed.Num(); ++Index)
 	{
 		const FShooterKillFeedEntry& Entry = Feed[Index];
@@ -608,16 +855,42 @@ void AShooterHUD::DrawKillFeed()
 			continue;
 		}
 		const FKillFeedLine& Line = KillFeedLines[Index];
-		float X = Width - EdgeMargin - Line.Killer.Width - Line.Middle.Width - Line.Victim.Width;
+		float IconU = 0.0f;
+		float IconV = 0.0f;
+		float IconWidth = 0.0f;
+		float IconHeight = 0.0f;
+		GetIconRect(Line.Icon, IconU, IconV, IconWidth, IconHeight);
+		float HeadshotWidth = 0.0f;
+		float HeadshotHeight = 0.0f;
+		if (Line.bHeadshot)
+		{
+			GetIconRect(EShooterHUDIcon::Headshot, IconU, IconV, HeadshotWidth, HeadshotHeight);
+			HeadshotWidth += 2.0f;
+		}
+		const float KillerPart = Line.Killer.Text.IsEmpty() ? 0.0f : Line.Killer.Width + Space;
+		const float Width = KillerPart + IconWidth + HeadshotWidth + Space + Line.Victim.Width;
+		const float Height = FMath::Max(TextLine, IconHeight);
+		float X = Right - Width;
+		Canvas->DrawTile(X - BandPadding - 2.0f, Y - BandPadding, Width + (2.0f * BandPadding) + 4.0f,
+			Height + (2.0f * BandPadding), KillFeedBandColor);
+		const float TextY = Y + FMath::RoundToFloat((Height - TextLine) * 0.5f);
+		const float IconY = Y + FMath::RoundToFloat((Height - IconHeight) * 0.5f);
 		if (!Line.Killer.Text.IsEmpty())
 		{
-			Canvas->DrawText(HUDFont(), Line.Killer.Text, X, Y, GetTeamColor(Entry.KillerTeam));
+			DrawHUDText(Line.Killer, X, TextY, ToLinear(GetTeamColor(Entry.KillerTeam)));
 		}
-		X += Line.Killer.Width;
-		Canvas->DrawText(HUDFont(), Line.Middle.Text, X, Y, FColor::White);
-		X += Line.Middle.Width;
-		Canvas->DrawText(HUDFont(), Line.Victim.Text, X, Y, GetTeamColor(Entry.VictimTeam));
-		Y += Line.Victim.Height + 4.0f;
+		X += KillerPart;
+		DrawHUDIcon(Line.Icon, X, IconY, KillIconColor);
+		X += IconWidth;
+		if (Line.bHeadshot)
+		{
+			DrawHUDIcon(EShooterHUDIcon::Headshot, X + 2.0f, IconY, HeadshotIconColor);
+			X += HeadshotWidth;
+		}
+		X += Space;
+		DrawHUDText(Line.Victim, X, TextY, ToLinear(GetTeamColor(Entry.VictimTeam)));
+		Y += Height + (2.0f * BandPadding) + 2.0f;
+		++NumKillFeedLinesDrawn;
 	}
 }
 
@@ -662,14 +935,13 @@ void AShooterHUD::DrawRadio()
 			DrawnRadioLines.Add(Index);
 		}
 	}
-	// Above the money, the newest at the bottom (CS's chat area).
-	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HUDLineHeight();
-	float Y = Bottom - (LineStep() * static_cast<float>(DrawnRadioLines.Num() + 1));
+	// Above the health, the newest at the bottom (CS's chat area).
+	float Y = GetBottomRowY() - 8.0f - (LineStep() * static_cast<float>(DrawnRadioLines.Num()));
 	for (const int32 Index : DrawnRadioLines)
 	{
 		const FRadioLine& Line = RadioLines[Index];
-		Canvas->DrawText(HUDFont(), Line.Sender.Text, EdgeMargin, Y, Line.Color);
-		Canvas->DrawText(HUDFont(), Line.Message.Text, EdgeMargin + Line.Sender.Width, Y, MessageColor);
+		DrawHUDText(Line.Sender, EdgeMargin, Y, Line.Color);
+		DrawHUDText(Line.Message, EdgeMargin + Line.Sender.Width, Y, MessageColor);
 		Y += LineStep();
 	}
 }
@@ -705,7 +977,7 @@ void AShooterHUD::DrawRadioMenu()
 	if (Menu != RadioMenuShown)
 	{
 		RadioMenuShown = Menu;
-		RadioMenuTitle.Set(GetRadioMenuTitle(Menu));
+		RadioMenuTitle.Set(GetRadioMenuTitle(Menu), GetBoldFont());
 		RadioMenuLines.SetNum(Messages.Num());
 		for (int32 Index = 0; Index < Messages.Num(); ++Index)
 		{
@@ -713,14 +985,25 @@ void AShooterHUD::DrawRadioMenu()
 		}
 		NumTextFormats += 1 + Messages.Num();
 	}
-	const float X = EdgeMargin * 2.0f;
-	float Y = BuyMenuTop;
-	Canvas->DrawText(HUDFont(), RadioMenuTitle.Text, X, Y, StatusColor);
+	// On a dark panel where the buy menu sits.
+	constexpr float Padding = 8.0f;
+	float Width = RadioMenuTitle.Width;
+	for (const FShooterHUDText& Line : RadioMenuLines)
+	{
+		Width = FMath::Max(Width, Line.Width);
+	}
+	const float BuyMenuTop = GetMenuTop();
+	Canvas->DrawTile(BuyMenuLeft, BuyMenuTop, Width + (2.0f * Padding),
+		(LineStep() * static_cast<float>(RadioMenuLines.Num() + 1)) + (2.0f * Padding) - 4.0f,
+		FLinearColor(0.0f, 0.0f, 0.0f, 0.6f));
+	const float X = BuyMenuLeft + Padding;
+	float Y = BuyMenuTop + Padding;
+	DrawHUDText(RadioMenuTitle, X, Y, StatusColor);
 	++NumRadioMenuLines;
 	for (const FShooterHUDText& Line : RadioMenuLines)
 	{
 		Y += LineStep();
-		Canvas->DrawText(HUDFont(), Line.Text, X, Y, MessageColor);
+		DrawHUDText(Line, X, Y, MessageColor);
 		++NumRadioMenuLines;
 	}
 }
@@ -770,7 +1053,8 @@ void AShooterHUD::DrawMessages()
 																									   : MessageColor;
 			break;
 	}
-	UpdateText(MessageText, Key,
+	UpdateText(
+		MessageText, Key,
 		[RoundState, Reason, Winner, ScoreCT, ScoreT, BombState, Site, bToldOfDrop, bSidesSwitched]()
 		{
 			switch (RoundState)
@@ -802,11 +1086,9 @@ void AShooterHUD::DrawMessages()
 					break;
 			}
 			return FString();
-		});
-	if (!MessageText.Text.IsEmpty())
-	{
-		DrawCentredText(*Canvas, MessageText, CenterX, Y, Color);
-	}
+		},
+		GetBoldFont());
+	DrawHUDText(MessageText, CenterX, Y, Color, ETextJustify::Center);
 }
 
 void AShooterHUD::DrawBuyRefusal()
@@ -817,7 +1099,7 @@ void AShooterHUD::DrawBuyRefusal()
 	{
 		return;
 	}
-	Canvas->DrawText(HUDFont(), Controller->GetLastBuyMessage(), EdgeMargin * 2.0f, BuyMenuTop, RefusalColor);
+	DrawHUDText(GetTextFont(), Controller->GetLastBuyMessage(), BuyMenuLeft, GetMenuTop(), RefusalColor);
 }
 
 void AShooterHUD::DrawPickupNotice()
@@ -834,10 +1116,10 @@ void AShooterHUD::DrawPickupNotice()
 	// Formatted once per pickup (its time is the key).
 	UpdateText(PickupText, MakeKey(static_cast<int64>(Controller->GetPickupTime() * 1000.0f)),
 		[&Message]() { return Message; });
-	const float Width = static_cast<float>(Canvas->GetSizeX());
-	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HUDLineHeight();
-	Canvas->DrawText(
-		HUDFont(), PickupText.Text, Width - PickupText.Width - EdgeMargin, Bottom - (2.0f * LineStep()), StatusColor);
+	// Above the money: the ammunition, the weapon's name and the money under it.
+	const float Right = static_cast<float>(Canvas->GetSizeX()) - EdgeMargin;
+	const float Y = GetBottomRowY() - (2.0f * LineHeightOf(GetNumberFont())) - HUDLineHeight() - 8.0f;
+	DrawHUDText(PickupText, Right, Y, StatusColor, ETextJustify::Right);
 	bPickupNoticeShown = true;
 }
 
@@ -875,7 +1157,7 @@ void AShooterHUD::DrawProgress()
 	const float Y = static_cast<float>(Canvas->GetSizeY()) * 0.62f;
 	constexpr float BarWidth = 300.0f;
 	constexpr float BarHeight = 12.0f;
-	DrawCentredText(*Canvas, Label, CenterX, Y - LineStep(), MessageColor);
+	DrawHUDText(GetTextFont(), Label, CenterX, Y - LineStep(), MessageColor, ETextJustify::Center);
 	Canvas->DrawTile(CenterX - (BarWidth * 0.5f), Y, BarWidth, BarHeight, FLinearColor(0.1f, 0.1f, 0.1f, 0.8f));
 	Canvas->DrawTile(CenterX - (BarWidth * 0.5f), Y, BarWidth * Fraction, BarHeight, StatusColor);
 }
@@ -956,77 +1238,19 @@ void AShooterHUD::DrawCrosshair()
 	Canvas->DrawLine(CenterX, CenterY + Inner, CenterX, CenterY + Outer, CrosshairColor, CrosshairThickness);
 }
 
-void AShooterHUD::DrawScoreboard()
-{
-	const UWorld* World = GetWorld();
-	const AGameModeBase* GameMode = World != nullptr ? World->GetAuthGameMode() : nullptr;
-	if (GameMode == nullptr)
-	{
-		return;
-	}
-	const AShooterGameState* ShooterGameState = GetShooterGameState();
-	const int32 ScoreCT = ShooterGameState != nullptr ? ShooterGameState->GetTeamScore(EShooterTeam::CT) : 0;
-	const int32 ScoreT = ShooterGameState != nullptr ? ShooterGameState->GetTeamScore(EShooterTeam::T) : 0;
-	// What the board shows (the scores, then each player's state, team, kills, deaths, money and life): the board is
-	// formatted again only when it changed.
-	NewScoreboardKey.Reset();
-	NewScoreboardKey.Add(ScoreCT);
-	NewScoreboardKey.Add(ScoreT);
-	for (const APlayerState* State : GameMode->GetGameState().GetPlayerArray())
-	{
-		const AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(State);
-		if (ShooterState == nullptr || ShooterState->GetTeam() == EShooterTeam::None)
-		{
-			continue; // a spectator (the bot match's player) plays for no team
-		}
-		const AController* Controller = Cast<AController>(ShooterState->GetOwner());
-		const AShooterCharacter* Pawn =
-			Controller != nullptr ? Cast<AShooterCharacter>(Controller->GetPawn()) : nullptr;
-		NewScoreboardKey.Add(ToKey(ShooterState));
-		NewScoreboardKey.Add(static_cast<int64>(ShooterState->GetTeam()));
-		NewScoreboardKey.Add(ShooterState->GetKills());
-		NewScoreboardKey.Add(ShooterState->GetDeaths());
-		NewScoreboardKey.Add(ShooterState->GetMoney());
-		NewScoreboardKey.Add(Pawn == nullptr || !Pawn->IsAlive() ? 1 : 0);
-	}
-	if (NewScoreboardKey != ScoreboardKey || ScoreboardCTText.Text.IsEmpty())
-	{
-		Swap(ScoreboardKey, NewScoreboardKey);
-		FString CTLines;
-		FString TLines;
-		for (const APlayerState* State : GameMode->GetGameState().GetPlayerArray())
-		{
-			const AShooterPlayerState* ShooterState = Cast<AShooterPlayerState>(State);
-			if (ShooterState == nullptr || ShooterState->GetTeam() == EShooterTeam::None)
-			{
-				continue;
-			}
-			const AController* Controller = Cast<AController>(ShooterState->GetOwner());
-			const AShooterCharacter* Pawn =
-				Controller != nullptr ? Cast<AShooterCharacter>(Controller->GetPawn()) : nullptr;
-			const bool bDead = Pawn == nullptr || !Pawn->IsAlive();
-			FString& Lines = ShooterState->GetTeam() == EShooterTeam::T ? TLines : CTLines;
-			Lines += FString::Printf(TEXT("%-14s %3d %3d  $%-5d%s\n"), *ShooterState->GetPlayerName(),
-				ShooterState->GetKills(), ShooterState->GetDeaths(), ShooterState->GetMoney(),
-				bDead ? TEXT(" dead") : TEXT(""));
-		}
-		ScoreboardCTText.Set(
-			FString::Printf(TEXT("Counter-Terrorists  %d\nName            K   D  Money\n"), ScoreCT) + CTLines);
-		ScoreboardTText.Set(FString::Printf(TEXT("Terrorists  %d\nName            K   D  Money\n"), ScoreT) + TLines);
-		NumTextFormats += 2;
-	}
-	// A box around the longer team's lines (the two headers and one line per player).
-	const float Width = static_cast<float>(Canvas->GetSizeX());
-	constexpr float Top = 80.0f;
-	constexpr float Padding = 12.0f;
-	Canvas->DrawTile(Width * 0.1f, Top, Width * 0.8f,
-		FMath::Max(ScoreboardCTText.Height, ScoreboardTText.Height) + (2.0f * Padding),
-		FLinearColor(0.0f, 0.0f, 0.0f, 0.6f));
-	Canvas->DrawText(HUDFont(), ScoreboardCTText.Text, Width * 0.12f, Top + Padding, CTColor);
-	Canvas->DrawText(HUDFont(), ScoreboardTText.Text, Width * 0.54f, Top + Padding, TColor);
-}
-
 // The buy menu
+
+const FLinearColor UShooterBuyMenuWidget::AffordableColor(1.0f, 1.0f, 1.0f);
+const FLinearColor UShooterBuyMenuWidget::UnaffordableColor(0.45f, 0.45f, 0.45f);
+const FLinearColor UShooterBuyMenuWidget::CategoryColor(1.0f, 0.75f, 0.2f);
+
+namespace
+{
+	/** The buy menu table's columns. */
+	const FName BuyKeyColumn(TEXT("Key"));
+	const FName BuyItemColumn(TEXT("Item"));
+	const FName BuyPriceColumn(TEXT("Price"));
+} // namespace
 
 UShooterBuyMenuWidget::UShooterBuyMenuWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -1042,27 +1266,49 @@ UTextBlock* UShooterBuyMenuWidget::AddLine(UVerticalBox& Box, float TopPadding)
 
 void UShooterBuyMenuWidget::NativeOnInitialized()
 {
-	// Canvas > Border (the panel) > VerticalBox > the lines.
+	const AShooterHUD* HUD = Cast<AShooterHUD>(GetOwningHUD());
+	const FSlateFontInfo BoldFont(const_cast<UFont*>(HUD != nullptr ? HUD->GetBoldFont() : nullptr), 14);
+	// Canvas > Border (the panel) > VerticalBox > the heading (a horizontal box: the page, the money), the refusal,
+	// the page's table and the last buy.
 	UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>();
 	WidgetTree->RootWidget = Root;
 	Panel = WidgetTree->ConstructWidget<UBorder>();
-	Panel->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f));
-	Panel->SetPadding(FMargin(12.0f));
+	Panel->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.82f));
+	Panel->SetPadding(FMargin(8.0f));
 	UCanvasPanelSlot* PanelSlot = Root->AddChildToCanvas(Panel);
-	PanelSlot->SetPosition(FVector2D(EdgeMargin * 2.0f, BuyMenuTop));
+	PanelSlot->SetPosition(FVector2D(BuyMenuLeft, HUD != nullptr ? HUD->GetMenuTop() : 136.0f));
 	PanelSlot->SetAutoSize(true);
 	UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>();
 	Panel->SetContent(Box);
 	constexpr float LineGap = 4.0f;
-	MoneyText = AddLine(*Box, 0.0f);
-	MoneyText->SetColorAndOpacity(FLinearColor(1.0f, 0.75f, 0.2f));
+	UHorizontalBox* Heading = WidgetTree->ConstructWidget<UHorizontalBox>();
+	Box->AddChildToVerticalBox(Heading);
+	TitleText = WidgetTree->ConstructWidget<UTextBlock>();
+	TitleText->SetFont(BoldFont);
+	TitleText->SetColorAndOpacity(CategoryColor);
+	UHorizontalBoxSlot* TitleSlot = Heading->AddChildToHorizontalBox(TitleText);
+	TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	MoneyText = WidgetTree->ConstructWidget<UTextBlock>();
+	MoneyText->SetFont(BoldFont);
+	MoneyText->SetColorAndOpacity(FLinearColor(0.55f, 0.9f, 0.35f));
+	UHorizontalBoxSlot* MoneySlot = Heading->AddChildToHorizontalBox(MoneyText);
+	MoneySlot->SetPadding(FMargin(16.0f, 0.0f, 0.0f, 0.0f));
+	MoneySlot->SetHorizontalAlignment(HAlign_Right);
 	RefusalText = AddLine(*Box, LineGap);
 	RefusalText->SetColorAndOpacity(RefusalColor);
-	for (int32 Index = 0; Index < AShooterPlayerController::MaxBuyMenuEntries; ++Index)
-	{
-		ItemTexts.Add(AddLine(*Box, LineGap));
-	}
-	ItemLines.SetNum(ItemTexts.Num());
+	RefusalText->SetVisibility(ESlateVisibility::Collapsed);
+	// The page: the number key, the name, the price (right-aligned); no header, no row bands (the highlight is the
+	// pad's line).
+	ItemTable = WidgetTree->ConstructWidget<UTableView>();
+	ItemTable->AddColumn(FTableViewColumn(BuyKeyColumn, FText::FromString(TEXT("#")), 20.0f, HAlign_Right));
+	ItemTable->AddColumn(FTableViewColumn(BuyItemColumn, FText::FromString(TEXT("Item")), 0.0f, HAlign_Left));
+	ItemTable->AddColumn(FTableViewColumn(BuyPriceColumn, FText::FromString(TEXT("Price")), 56.0f, HAlign_Right));
+	ItemTable->SetShowHeader(false);
+	ItemTable->RowBackgroundColor = FLinearColor::Transparent;
+	ItemTable->AlternateRowBackgroundColor = FLinearColor(1.0f, 1.0f, 1.0f, 0.04f);
+	ItemTable->HighlightBackgroundColor = FLinearColor(0.55f, 0.42f, 0.1f, 0.55f);
+	ItemTable->CellPadding = FMargin(4.0f, 2.0f);
+	Box->AddChildToVerticalBox(ItemTable)->SetPadding(FMargin(0.0f, LineGap, 0.0f, 0.0f));
 	LastBuyText = AddLine(*Box, LineGap * 2.0f);
 	LastBuyText->SetColorAndOpacity(FLinearColor(0.7f, 0.9f, 0.7f));
 	Panel->SetVisibility(ESlateVisibility::Collapsed);
@@ -1085,12 +1331,13 @@ void UShooterBuyMenuWidget::NativeTick(float /*DeltaTime*/)
 	// Each line is set again only when what it shows changed (the menu is open for seconds at a time).
 	const int32 Money = State != nullptr ? State->GetMoney() : 0;
 	const int32 Category = Controller->GetBuyMenuCategory();
-	if (MoneyLine.Update(MakeKey(Money, Category),
-			[Money, Category]()
-			{
-				return FString::Printf(
-					TEXT("%s   $ %d"), AShooterPlayerController::GetBuyMenuCategoryLabel(Category), Money);
-			}))
+	if (TitleLine.Update(MakeKey(Category),
+			[Category]() { return FString(AShooterPlayerController::GetBuyMenuCategoryLabel(Category)); }))
+	{
+		TitleText->SetText(FText::FromString(TitleLine.Text));
+		++NumTextFormats;
+	}
+	if (MoneyLine.Update(MakeKey(Money), [Money]() { return FString::Printf(TEXT("$ %d"), Money); }))
 	{
 		MoneyText->SetText(FText::FromString(MoneyLine.Text));
 		++NumTextFormats;
@@ -1106,47 +1353,60 @@ void UShooterBuyMenuWidget::NativeTick(float /*DeltaTime*/)
 		Refusal = TEXT("You cannot buy now");
 	}
 	SetLineText(*RefusalText, ShownRefusal, Refusal);
+	const ESlateVisibility RefusalVisibility =
+		Refusal.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible;
+	if (RefusalText->GetVisibility() != RefusalVisibility)
+	{
+		RefusalText->SetVisibility(RefusalVisibility);
+	}
 	// The page's lines: the categories, or the category's items with their prices.
 	TArray<FShooterBuyMenuEntry, TInlineAllocator<AShooterPlayerController::MaxBuyMenuEntries>> Entries;
 	Controller->GetBuyMenuEntries(Entries);
-	for (int32 Index = 0; Index < ItemTexts.Num(); ++Index)
+	if (ItemTable->GetNumRows() != Entries.Num())
 	{
-		UTextBlock& Line = *ItemTexts[Index];
-		const bool bShown = Entries.IsValidIndex(Index);
-		const ESlateVisibility LineVisibility = bShown ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
-		if (Line.GetVisibility() != LineVisibility)
+		// Another page: its rows, their lines formatted again.
+		ItemTable->ClearRows();
+		for (int32 Index = 0; Index < Entries.Num(); ++Index)
 		{
-			Line.SetVisibility(LineVisibility);
+			(void)ItemTable->AddRow();
 		}
-		if (!bShown)
-		{
-			continue;
-		}
+		ItemLines.Reset();
+	}
+	ItemLines.SetNum(Entries.Num());
+	for (int32 Index = 0; Index < Entries.Num(); ++Index)
+	{
 		const FShooterBuyMenuEntry& Entry = Entries[Index];
 		const int32 Price = Entry.Item != nullptr && GameMode != nullptr && Pawn != nullptr
 			? GameMode->GetPrice(*Pawn, Entry.Item)
 			: -1;
 		const bool bAffordable = bCanBuy && (Entry.Item == nullptr || (Price >= 0 && Money >= Price));
-		// The pad's highlighted line is marked.
-		const bool bSelected = Index == Controller->GetBuyMenuSelection();
 		const bool bChanged = ItemLines[Index].Update(
-			MakeKey(Price, (bSelected ? 1 : 0) | (bAffordable ? 2 : 0), ToKey(Entry.Label), Entry.Category),
-			[&Entry, Index, Price, bSelected]()
+			MakeKey(Price, bAffordable ? 1 : 0, ToKey(Entry.Label), Entry.Category),
+			[&Entry]()
 			{
-				const TCHAR* Marker = bSelected ? TEXT(">") : TEXT(" ");
-				if (Entry.Item == nullptr)
-				{
-					return FString::Printf(TEXT("%s%d  %s >"), Marker, Index + 1, Entry.Label);
-				}
-				return Price >= 0 ? FString::Printf(TEXT("%s%d  %-14s $%d"), Marker, Index + 1, Entry.Label, Price)
-								  : FString::Printf(TEXT("%s%d  %-14s  -"), Marker, Index + 1, Entry.Label);
+				// A category's name, an item's display name (CS's: "AK-47", "Kevlar + Helmet").
+				return Entry.Item == nullptr ? FString(Entry.Label) : AShooterWeapon::GetItemDisplayName(Entry.Label);
 			});
 		if (bChanged)
 		{
-			Line.SetText(FText::FromString(ItemLines[Index].Text));
-			Line.SetColorAndOpacity(bAffordable ? FLinearColor(1.0f, 1.0f, 1.0f) : FLinearColor(0.45f, 0.45f, 0.45f));
+			ItemTable->SetCellText(Index, 0, FString::FromInt(Index + 1));
+			ItemTable->SetCellText(Index, 1, ItemLines[Index].Text);
+			ItemTable->SetCellText(Index, 2,
+				Entry.Item == nullptr ? FString(TEXT(">"))
+					: Price >= 0      ? FString::Printf(TEXT("$%d"), Price)
+									  : FString(TEXT("-")));
+			ItemTable->SetRowColor(Index,
+				Entry.Item == nullptr ? CategoryColor
+					: bAffordable     ? AffordableColor
+									  : UnaffordableColor);
 			++NumTextFormats;
 		}
+	}
+	// The pad's line.
+	const int32 Selection = Controller->GetBuyMenuSelection();
+	if (ItemTable->GetHighlightedRow() != Selection)
+	{
+		ItemTable->SetHighlightedRow(Entries.IsValidIndex(Selection) ? Selection : INDEX_NONE);
 	}
 	SetLineText(*LastBuyText, ShownLastBuy, Controller->GetLastBuyMessage());
 }

@@ -82,17 +82,17 @@ by itself ([Bot match](#bot-match)).
 | Space | Cross | Jump (on a ladder: off it) |
 | Left Ctrl | Circle | Crouch: a press crouches and the next stands up (`SetToggleCrouch 0` holds it instead; it stays crouched under a ceiling until there is room) |
 | Left Shift (held) | L3 (held) | Walk (52 % of the speed) |
-| Left mouse button | R2 | Fire (held: automatic weapons keep firing) |
+| Left mouse button | R2 | Fire (held: automatic weapons keep firing); with the bomb drawn in a bomb site, plant it while held (CS) |
 | Right mouse button | L2 | The secondary attack: the AWP's zoom (two levels, then off), the USP's and the M4A1's silencer, the Glock's burst mode, the knife's stab |
 | R | Square | Reload |
 | 1 / 2 / 3 / 4 / 5 | R1 / L1 / D-pad up / D-pad left / D-pad down (outside the buy zone or time) | Primary (the MP5, the rifles, the AWP) / pistol / knife / grenade (again: the next grenade, HE, flashbang, smoke) / the bomb (CS's C4 in slot 5, for its carrier: the weapon is put away and the HUD shows `C4`; a weapon's key puts it back) |
 | G | D-pad right | Drop the weapon in hand, not the knife nor a grenade, or the bomb when it is drawn (a pawn without one in that slot, or a terrorist for the bomb, picks it up by walking over it; the HUD says `Picked up <item>`) |
 | , / . | — | A box of the primary's / the pistol's ammunition (CS: buyammo1 / buyammo2), when the player may buy |
-| E (held) | Triangle (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
+| E (held) | Triangle (held) | Plant the bomb (its carrier, standing still in a bomb site, 3 s; Fire plants too with the bomb drawn) or defuse it (a CT at the planted bomb, 10 s, 5 with a kit) |
 | Escape | Start | The pause menu ([Menus](#menus)): the game pauses; Start or Escape again resumes. Escape closes the buy or the radio menu first |
 | B | D-pad down, where the player may buy (elsewhere it draws the C4, as 5) | The buy menu (the console's `buymenu` toggles it too), CS's: 1 Pistols, 2 SMGs, 3 Rifles, 4 Primary ammo, 5 Secondary ammo, 6 Equipment; a category's page lists what the team may buy (Rifles: the AK-47 for the T, the M4A1 for the CT, the AWP), and a purchase goes back to the first page. It opens only when its player may buy (alive, in the team's buy zone, within the buy time; never while spectating) and closes by itself when that stops; the HUD says why for 2 s (`BuyRefusalDuration`). While it is open: the number keys choose a line; the D-pad's up and down move the highlight (`>`) and Cross chooses it; Escape or Circle go back to the first page, and there close it (B and Start close it). It takes these keys only while it is open |
 | Z / X / C | — | The radio's menus (CS 1.6's radio1, radio2, radio3; [The radio](#the-radio)): the number keys (1 to 9) send a message to the team and close the menu, Esc or the same key closes it; a menu takes these keys only while it is open, and it and the buy menu close each other |
-| Tab (held) | Select (held) | The scoreboard |
+| Tab (held) | Select (held) | The scoreboard (the console's `ShowScores 1` / `ShowScores 0` too) |
 | F4 (`stat unit`) | R3 (`stat unit`) | The engine's stats (FPS, MS, RAM, VRAM, TRIS, OBJ; on from the start on the PS2: `bShowStatsByDefault`) |
 | Left mouse button, while spectating | R2 | The death cam ends; the next living teammate (CS 1.6's spectator keys) |
 | Right mouse button, while spectating | L2 | The teammate before |
@@ -155,7 +155,8 @@ in the tests) and each command applies its option and saves them all: `SetSensit
 pixel and the stick's rates times the scale, 1 by default), `SetInvertY 0|1` (up looks down, the mouse and the stick),
 `SetVolume <0..1>` (the audio device's master volume), `SetCrosshairColor <r> <g> <b>` (0..1 each), `SetToggleCrouch 0|1`
 (1, the default: a press of the crouch key crouches and the next stands up; 0: held, as CS 1.6); the menus' options
-page changes the same four ([Menus](#menus)). The main menu's last match (the map, the difficulty, the rounds to win,
+page changes the same four ([Menus](#menus)); `SetShowFrameStats 0|1` (the HUD's frame readout under the
+radar, on by default). The main menu's last match (the map, the difficulty, the rounds to win,
 the bots) is saved with them when a match starts from the menu. A card that is
 missing, unformatted, full or pulled out logs why the options were not saved (`ESaveGameResult`), and the game plays
 on with them.
@@ -181,7 +182,7 @@ ShooterGame binds none yet.
 | `AShooterGameState` (`AGameState`) | `AShooterGameState` | The round's phase and number, the phase's end, the score, the halftime (`IsSecondHalf`, `GetHalftimeRound`), the bomb's state, the kill feed and the radio's last messages (`GetRadioLog`) |
 | `AShooterPlayerState` | `AShooterPlayerState` | The team (`EShooterTeam`: None, CT, T), the money, the kills and the deaths |
 | `AShooterBomb` (`AActor`) | CS's C4 | Carried, dropped, planted (beeping), defused or exploded |
-| `AShooterHUD` (`AHUD`) | `AShooterHUD` | CS's crosshair (green, 4 px gap growing with the spread, 7 px arms, 2 px thick; config), health, armor and money, the weapon and its ammunition, the bomb and the kit, the round's clock (`C4` instead once the bomb is planted: no countdown, as in CS) and the score, the kill feed, the team's radio messages and the radio menu ([The radio](#the-radio)), the round's messages (the terrorists read `The bomb has been dropped` while it lies on the floor; the second half's first freeze says the teams switched sides), the plant and defuse bar, the hit marker, the AWP's scope, the scoreboard, the radar, the damage direction indicator and who a spectator watches ([The HUD's radar and damage indicator](#the-huds-radar-and-damage-indicator)); `UShooterBuyMenuWidget` (a `UUserWidget`) is the buy menu: a widget tree (a `UCanvasPanel` holding a `UBorder` around a `UVerticalBox` of `UTextBlock`s: the money, why buying is refused, the items with their prices, the last buy) built in `NativeOnInitialized` and refreshed in `NativeTick`, collapsed while the menu is closed. A line of text is formatted (and a widget's text set) only when what it shows changes (`FShooterHUDText`: the money, the health, the clock's second, the score, the kill feed, the scoreboard's players) |
+| `AShooterHUD` (`AHUD`) | `AShooterHUD` | CS 1.6's HUD ([The HUD](#the-hud)): the crosshair (green, 4 px gap growing with the spread, 7 px arms, 2 px thick; config), the health and the armor, the ammunition, the weapon and the money, the bomb and the kit, the round's clock (`C4` instead once the bomb is planted: no countdown, as in CS) and the score, the kill feed with the weapons' icons, the team's radio messages and the radio menu ([The radio](#the-radio)), the round's messages (the terrorists read `The bomb has been dropped` while it lies on the floor; the second half's first freeze says the teams switched sides), the plant and defuse bar, the hit marker, the AWP's scope, the radar, the damage direction indicator and who a spectator watches ([The HUD's radar and damage indicator](#the-huds-radar-and-damage-indicator)). Its widgets: `UShooterBuyMenuWidget` (the buy menu: a `UBorder` around a heading, the refusal, the page in a `UTableView` and the last buy) and `UShooterScoreboardWidget` (the scoreboard: a `UTableView` a team), built in `NativeOnInitialized` and refreshed in `NativeTick`, collapsed while closed. A line of text is formatted (and a widget's text set) only when what it shows changes (`FShooterHUDText`: the money, the health, the clock's second, the score, the kill feed; the scoreboard's key) |
 | `AShooterWeapon` (`AActor`) and its classes | `AShooterWeapon`, `_Instant`, `_Projectile`; `AShooterProjectile` | The weapons ([Weapons](#weapons)) |
 
 The CS movement values, at 1 unit = 2.54 cm (CS's player is 72 units tall and 183 cm here):
@@ -527,6 +528,57 @@ Tests: `ShooterGame.Spectate.DeathCamThenTeammates` (killed by a terrorist off t
 the corpse and stays there with W held until 0.1 s before `DeathCamDuration`, then a living CT through its eyes, then
 the free look when every CT is dead; the HUD's line each time), `ShooterGame.Spectate.CyclingSkipsTheDead` (Fire, the
 right button and Jump while spectating, a dead teammate skipped both ways) and `ShooterGame.Rounds.SpectateTeammates`.
+
+## The HUD
+
+CS 1.6's layout on the 640 x 448 frame ([ps2-polish](../../Docs/PLANS/ps2-polish.md) P6), readable on a TV: the text in
+the engine's DejaVu Sans Condensed (14 px), the numbers in its bold face at 24 px (`NumberFontName`) and the headings at
+14 px (`BoldFontName`), every text and icon over the world with a one-pixel black drop shadow (readable on a bright
+sky as in a dark tunnel), the top centre's block and the kill feed on dark bands, the radar, the scoreboard and the buy
+menu on dark panels; the icons from one atlas,
+`/Game/UI/T_HUDIcons` (`IconsTextureName`: white shapes, their coverage in the alpha, tinted as they are drawn;
+`SourceArt/UI/make_hud_icons.py` draws them, the same bytes every run; 256 x 64, PSMT4 once cooked).
+
+- Bottom left the health with a cross (red at 25 or less) and the armor with a vest (with a helmet when it has one);
+  above them the team's radio messages.
+- Bottom right the ammunition (`clip | reserve`), the weapon's display name over it (`(silenced)` / `(burst)` after it;
+  `C4` with the bomb drawn), and over them the money in green with the buy zone's cart while the player may buy; the
+  pickup notice (`Picked up AK-47`) above.
+- On the left halfway down the bomb for its carrier (green, blinking red inside a bomb site, as CS's) and the defuse kit.
+- Under the radar a compact frame readout, `30 fps  33.3 ms` (the frames' real time averaged over half a second,
+  `FrameStatsRefreshSeconds`), the player's option `bShowFrameStats` (on by default; `SetShowFrameStats 0|1`, saved in
+  the `Settings` slot); the stats overlay (`stat unit`, F4, R3) keeps its place top right, above the kill feed. The
+  menus (the buy menu, the radio menu, a refusal) start under the readout.
+- Top centre the round's clock with a stopwatch (a bomb and `C4` once planted) between the teams' scores, `CT` and `T`
+  beside them, the round's number under it.
+- Top right the kill feed: the killer in the team's colour, the weapon's icon (a skull for the world, the C4 for the
+  bomb), the headshot's icon, the victim, on a dark band, for `KillFeedDuration` (6 s).
+- The weapons' names are CS's (`AShooterWeapon::DisplayName`: "AK-47", "M4A1", "USP", "Desert Eagle", "Glock-18",
+  "MP5", "AWP", "HE Grenade", "Flashbang", "Smoke Grenade", "Knife"; `GetItemDisplayName` adds "C4" and the
+  equipment's), in the HUD, the kill feed, the buy menu and the pickup notice.
+- **The scoreboard** (Tab, Select; `UShooterScoreboardWidget`): a panel in the middle with the map's name, then each
+  team (the counter-terrorists first): its name and players, its score, and a `UTableView` of its players (Name, a
+  status column, Score (the kills), Deaths, Latency) sorted by score, fewer deaths first on a tie; `DEAD` on the dead
+  (their rows dimmed), `BOMB` on the carrier for a terrorist or a spectator, `BOT` as a bot's latency (`0` for the
+  player, who plays locally); the player's row highlighted, the spectators listed under the tables. It is filled only
+  when a score or a player's line changes.
+- **The buy menu** (`UShooterBuyMenuWidget`): a panel under the radar with the page's name and the money, why buying is
+  refused, the page's lines in a `UTableView` (the number key, the category in amber with `>` or the item's display
+  name and price, grey when the player cannot afford it) with the pad's line highlighted, and the last buy's result.
+
+Captures: `-ExecCmdsAfterFrames=N` holds `-ExecCmds=` until frame N (not in Shipping), so the buy menu and the
+scoreboard can be shot once the match plays:
+`ShooterGame.exe "-ExecCmds=bot_fill;buymenu" -ExecCmdsAfterFrames=40 -Screenshot=<file.bmp> -ExitAfterFrames=90`
+(`ShowScores 1` for the scoreboard).
+
+Tests: `ShooterGame.HUD.IconAtlas` (every icon of the table has its shape in the atlas, nothing outside, white at 16
+alphas), `.DisplayNames` (CS's names, every weapon's and its kill feed icon), `.KillFeedIcons` (the weapons' and the
+headshot's icons at their texels, the world's skull, the status's icons and numbers), `.Scoreboard` (a CT and a T
+viewer: the tables' rows, their order, DEAD, BOMB for the T only, BOT, the highlight, the team's score, filled again
+only on a change), `.BuyMenuTable` (the categories, the rifles by their names and prices, grey until affordable),
+`.FrameStats` (30 fps, 33.3 ms at 30 Hz; the option hides it), `ShooterGame.Input.FirePlantsTheBomb` (Fire with the
+bomb drawn plants while held, stops when released, fires no shot),
+and `.RoundInfo`, `.TextCache` updated.
 
 ## The HUD's radar and damage indicator
 

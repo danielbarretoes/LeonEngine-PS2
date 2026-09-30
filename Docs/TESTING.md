@@ -173,6 +173,12 @@ and `ShooterGame.Buy.BuyTimeAfterTheFreeze`. N30d's halftime, spectating and HUD
 halftime), `.MatchEndsAtTheMajority`, `ShooterGame.Spectate.DeathCamThenTeammates` (the death cam's aim and length,
 then a teammate, then the free look), `.CyclingSkipsTheDead` (the spectator's keys), `ShooterGame.HUD.Radar` (the
 projection, the primitives of a 5v5 frame, no allocation) and `.DamageIndicator` (the arc's direction and its end).
+[ps2-polish](PLANS/ps2-polish.md) P6's HUD (`ShooterHUDTests.cpp`): `ShooterGame.HUD.IconAtlas` (the atlas and the
+HUD's icon table agree), `.DisplayNames`, `.KillFeedIcons` (the icons drawn at their texels), `.Scoreboard` (the
+`UTableView`s' content, order, DEAD / BOMB / BOT and the highlight, for a CT and a T viewer), `.BuyMenuTable`,
+`.FrameStats` (the readout under the radar and its option) and
+`ShooterGame.Input.FirePlantsTheBomb`; the engine's `System.Engine.Canvas.TrianglesAndIcons` (an icon's texels, a
+triangle item's corners and colours, drawn in the tiles' order).
 N30c's CS movement is `ShooterGame.Movement.*` (`ShooterMovementTests.cpp`, at the fixed 30 Hz step): `FallDamage`
 (the thresholds with N30e's multiplayer 1.25, lethal at 935 u/s, and drops of 3, 9 and 16 m: unhurt, hurt by the
 landing speed's damage without armor or tagging, dead by the world in the kill feed), `Ladder` (grabbing a tagged volume, climbing at 508 cm/s and faster looking up, hanging

@@ -1,15 +1,21 @@
 #pragma once
 
 #include "Blueprint/UserWidget.h"
+#include "CanvasTypes.h"
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
+#include "UObject/SoftObjectPath.h"
 #include "ShooterHUD.generated.h"
 
 class AShooterCharacter;
 class AShooterGameState;
 class AShooterPlayerController;
 class UBorder;
+class UFont;
+class UShooterScoreboardWidget;
+class UTableView;
 class UTextBlock;
+class UTexture2D;
 class UVerticalBox;
 
 /**
@@ -29,29 +35,31 @@ struct FShooterHUDTextKey
 
 /**
  * A line of HUD text kept between frames (ps2-shipping N20: FString::Printf and the text's measure cost the EE every
- * frame): Update formats it, and measures it for the HUD font, only when its key changed.
+ * frame): Update formats it, and measures it in its font, only when its key changed.
  */
 struct FShooterHUDText
 {
 	FString Text;
 	float Width = 0.0f;
 	float Height = 0.0f;
+	/** The font it is measured and drawn in (null: the HUD's small font). */
+	const UFont* Font = nullptr;
 
-	/** Formats Text with Format() and measures it when Key differs from the last one (or the first time): true then. */
+	/** Formats Text with Format() and measures it in InFont when Key differs from the last one (or the first time). */
 	template <typename FormatType>
-	bool Update(const FShooterHUDTextKey& Key, FormatType&& Format)
+	bool Update(const FShooterHUDTextKey& Key, FormatType&& Format, const UFont* InFont = nullptr)
 	{
-		if (bFormatted && Key == LastKey)
+		if (bFormatted && Key == LastKey && InFont == Font)
 		{
 			return false;
 		}
-		Set(Format());
+		Set(Format(), InFont);
 		LastKey = Key;
 		return true;
 	}
 
-	/** Takes InText and measures it (a line whose key the caller keeps). */
-	void Set(const FString& InText);
+	/** Takes InText and measures it in InFont (a line whose key the caller keeps). */
+	void Set(const FString& InText, const UFont* InFont = nullptr);
 
 private:
 	FShooterHUDTextKey LastKey;
@@ -59,20 +67,57 @@ private:
 };
 
 /**
- * ShooterGame's HUD (UE ShooterGame: AShooterHUD), Counter-Strike's layout:
+ * The icons of the HUD's atlas (/Game/UI/T_HUDIcons, made by SourceArt/UI/make_hud_icons.py): the kill feed's weapons,
+ * the bomb, the world and the headshot (16 pixels high), and the status icons (24 x 24). AShooterHUD::GetIconRect has
+ * their rectangles, the script's table.
+ */
+enum class EShooterHUDIcon : uint8
+{
+	AK47,
+	M4A1,
+	AWP,
+	MP5,
+	Glock,
+	USP,
+	Deagle,
+	Knife,
+	HEGrenade,
+	Flashbang,
+	SmokeGrenade,
+	C4,
+	World,
+	Headshot,
+	Health,
+	Armor,
+	ArmorHelmet,
+	BuyZone,
+	Bomb,
+	Defuser,
+	Clock,
+	Num,
+};
+
+/**
+ * ShooterGame's HUD (UE ShooterGame: AShooterHUD), Counter-Strike 1.6's layout on the 640 x 448 frame, its text in the
+ * engine's DejaVu Sans Condensed (the numbers in its bold face, NumberFontName) with a one-pixel drop shadow over the
+ * world, its icons from one atlas (IconsTextureName, tinted as they are drawn):
  * - the crosshair at the centre, its gap growing with the weapon's spread (the dynamic crosshair), and the hit marker
  *   (four diagonal ticks, red on a kill) for HitMarkerDuration after a confirmed hit; the AWP's scope (a square view
  *   between black side bars, thin black cross lines) instead of the crosshair while zoomed;
- * - bottom left the health, the armor (H: a helmet) and the money, bottom right the weapon with its clip and reserve
- *   (C4 while the bomb is drawn), the bomb (C4) and the defuse kit when carried, and above them for
- *   PickupNoticeDuration what the player last picked up from the floor ("Picked up ak47", CS's pickup notice);
- * - top centre the round's clock (the freeze, then the round's time; the bomb once planted) and the score; top right
- *   the kill feed (the last kills, for KillFeedDuration);
- * - bottom left above the money the radio (CS's chat area): the viewer's team's last messages for
+ * - bottom left the health (a cross, red at 25 or less) and the armor (a vest, with a helmet when it has one); bottom
+ *   right the ammunition (clip | reserve), the weapon's name above it (its DisplayName, "(silenced)" or "(burst)"
+ *   after it; C4 while the bomb is drawn), and above them the money with the buy zone's cart while the player may buy;
+ *   above the money for PickupNoticeDuration what the player last picked up ("Picked up AK-47", CS's pickup notice);
+ * - on the left, halfway down, the bomb for its carrier (blinking inside a bomb site, CS's) and the defuse kit;
+ * - top centre the round's clock with a stopwatch (the freeze, then the round's time; the bomb and C4 once planted)
+ *   between the teams' scores, the round's number under it; top right the kill feed (the last kills for
+ *   KillFeedDuration: the killer, the weapon's icon, the headshot's, the victim, on a dark band);
+ * - bottom left above the health the radio (CS's chat area): the viewer's team's last messages for
  *   RadioMessageDuration, "<sender> (RADIO): <message>", the sender in the team's colour; the radio menu (Z, X, C)
  *   where the buy menu sits while it is open;
  * - the centre's messages (the warmup, the round's result, the match's end) and a bar while planting or defusing;
- * - the scoreboard while Tab is held (each team's players: kills, deaths, money, dead ones marked);
+ * - the scoreboard while Tab is held: UShooterScoreboardWidget, a UMG widget the HUD owns;
+ * - under the radar a compact frame readout ("30 fps  33.3 ms", the player's option bShowFrameStats, on by default);
  * - top left the radar (CS 1.6's): a square around the view's position that turns with its yaw (ahead is up), the
  *   living teammates as dots, for the terrorists the bomb's carrier (a bigger red dot) or the bomb on the floor or
  *   planted, and the bomb sites' letters; what lies beyond RadarRange sits on the edge. The team is the player's, or
@@ -88,7 +133,7 @@ private:
  *   BuyRefusalDuration, why it did not open or closed by itself (AShooterPlayerController::CanOpenBuyMenu).
  *
  * Its text is kept between frames (FShooterHUDText): a line is formatted and measured again only when the values it
- * shows change (the money, the health, the clock's second, the score, the kill feed, the scoreboard's players).
+ * shows change (the money, the health, the clock's second, the score, the kill feed).
  */
 UCLASS(Config = Game)
 class SHOOTERGAME_API AShooterHUD : public AHUD
@@ -98,10 +143,22 @@ class SHOOTERGAME_API AShooterHUD : public AHUD
 public:
 	AShooterHUD(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	/** Adds the buy menu widget. */
+	/** Loads the icons and the fonts, and adds the buy menu and the scoreboard widgets. */
 	void BeginPlay() override;
 	/** Draws the HUD into Canvas (UE: DrawHUD); the widgets paint after it. */
 	void DrawHUD() override;
+
+	/** The icons' atlas (a UTexture2D: SourceArt/UI/make_hud_icons.py's). */
+	UPROPERTY(Config)
+	FSoftObjectPath IconsTextureName;
+
+	/** The font of the HUD's numbers (the health, the armor, the ammunition, the money, the clock, the scores). */
+	UPROPERTY(Config)
+	FSoftObjectPath NumberFontName;
+
+	/** The font of headings (the scoreboard's and the buy menu's). */
+	UPROPERTY(Config)
+	FSoftObjectPath BoldFontName;
 
 	/** The crosshair's colour (CS's default green). */
 	UPROPERTY(Config)
@@ -131,7 +188,7 @@ public:
 	UPROPERTY(Config)
 	float BuyRefusalDuration = 2.0f;
 
-	/** Seconds the pickup notice ("Picked up ak47") shows after a pickup. */
+	/** Seconds the pickup notice ("Picked up AK-47") shows after a pickup. */
 	UPROPERTY(Config)
 	float PickupNoticeDuration = 2.0f;
 
@@ -139,7 +196,7 @@ public:
 	UPROPERTY(Config)
 	float KillFeedDuration = 6.0f;
 
-	/** The status text's colour (CS's amber). */
+	/** The status text's and icons' colour (CS's amber). */
 	UPROPERTY(Config)
 	FLinearColor StatusColor = FLinearColor(1.0f, 0.75f, 0.2f);
 
@@ -165,6 +222,22 @@ public:
 
 	UPROPERTY(Config)
 	float DamageIndicatorArc = 50.0f;
+
+	/** An icon's rectangle in the atlas, texels (the script's table). */
+	static void GetIconRect(EShooterHUDIcon Icon, float& OutU, float& OutV, float& OutUL, float& OutVL);
+	/** The kill feed's icon of a weapon's buy name (the feed's WeaponName): the world's skull for anything else. */
+	[[nodiscard]] static EShooterHUDIcon GetKillFeedIcon(const FString& WeaponName);
+	/** Icon of the loaded atlas (no texture before BeginPlay or without the atlas). */
+	[[nodiscard]] FCanvasIcon MakeHUDIcon(EShooterHUDIcon Icon) const;
+	/** The icons' atlas, once loaded. */
+	[[nodiscard]] const UTexture2D* GetIconsTexture() const
+	{
+		return IconsTexture;
+	}
+	/** The HUD's fonts: text (the engine's small font), numbers and headings (their fallbacks: the engine's). */
+	[[nodiscard]] static const UFont* GetTextFont();
+	[[nodiscard]] const UFont* GetNumberFont() const;
+	[[nodiscard]] const UFont* GetBoldFont() const;
 
 	/**
 	 * Where Location shows on a radar centred on Origin that turns with the view's Yaw (degrees): the offset from the
@@ -218,10 +291,35 @@ public:
 	{
 		return bPickupNoticeShown ? PickupText.Text : FString();
 	}
-	/** The weapon line drawn in the last frame ("ak47  30 | 90", "C4" with the bomb drawn). */
+	/** The weapon's name drawn in the last frame ("AK-47", "USP (silenced)", "C4" with the bomb drawn). */
 	[[nodiscard]] const FString& GetWeaponText() const
 	{
 		return WeaponText.Text;
+	}
+	/** The ammunition drawn in the last frame ("30 | 90"; empty for the knife and the bomb). */
+	[[nodiscard]] const FString& GetAmmoText() const
+	{
+		return AmmoText.Text;
+	}
+	/** The kill feed's lines drawn in the last frame (the newest last). */
+	[[nodiscard]] int32 GetNumKillFeedLines() const
+	{
+		return NumKillFeedLinesDrawn;
+	}
+	/** The frame readout drawn in the last frame ("30 fps  33.3 ms"), or empty (off, or not measured yet). */
+	[[nodiscard]] FString GetFrameStatsText() const
+	{
+		return bFrameStatsShown ? FrameStatsText.Text : FString();
+	}
+	/** Seconds the frame readout averages over (it is formatted again that often). */
+	UPROPERTY(Config)
+	float FrameStatsRefreshSeconds = 0.5f;
+	/** The top of the menus' place (the buy menu, the radio menu, a refusal): under the radar and the frame readout. */
+	[[nodiscard]] float GetMenuTop() const;
+	/** The scoreboard widget (null before BeginPlay). */
+	[[nodiscard]] UShooterScoreboardWidget* GetScoreboardWidget() const
+	{
+		return ScoreboardWidget;
 	}
 
 	/** The pawn the HUD shows (the owner's), or null. */
@@ -243,13 +341,17 @@ public:
 	}
 
 private:
-	/** The health, the armor, the money and the weapon's ammunition. */
+	/** The health and the armor, bottom left. */
 	void DrawStatus();
+	/** The ammunition, the weapon, the money and the buy zone, bottom right. */
+	void DrawWeaponAndMoney();
+	/** The bomb and the defuse kit, on the left halfway down. */
+	void DrawStatusIcons();
 	/** The round's clock and the score. */
 	void DrawRoundInfo();
 	/** The last kills. */
 	void DrawKillFeed();
-	/** The team's last radio messages, bottom left above the money (CS's chat area). */
+	/** The team's last radio messages, bottom left above the health (CS's chat area). */
 	void DrawRadio();
 	/** The radio menu while it is open (Z, X, C), where the buy menu sits. */
 	void DrawRadioMenu();
@@ -257,7 +359,7 @@ private:
 	void DrawMessages();
 	/** Why the buy menu did not open or closed by itself, where the menu sits, for BuyRefusalDuration. */
 	void DrawBuyRefusal();
-	/** What the player last picked up, bottom right above the weapon, for PickupNoticeDuration. */
+	/** What the player last picked up, bottom right above the money, for PickupNoticeDuration. */
 	void DrawPickupNotice();
 	/** A bar under the crosshair while planting or defusing. */
 	void DrawProgress();
@@ -267,8 +369,6 @@ private:
 	bool DrawScope();
 	/** The crosshair: four arms around the centre. */
 	void DrawCrosshair();
-	/** The players by team (Tab held). */
-	void DrawScoreboard();
 	/** The radar, top left. */
 	void DrawRadar();
 	/** The arc toward the last damage's source. */
@@ -277,37 +377,65 @@ private:
 	void DrawFlash();
 	/** Who the spectator watches. */
 	void DrawSpectatorInfo();
+	/** The frame's rate and time under the radar (the player's option, bShowFrameStats). */
+	void DrawFrameStats();
+	/** Text over the world: a one-pixel drop shadow under it. */
+	void DrawHUDText(const UFont* Font, const FString& Text, float X, float Y, const FLinearColor& Color,
+		ETextJustify Justify = ETextJustify::Left);
+	/** A kept line over the world, justified at X. */
+	void DrawHUDText(const FShooterHUDText& Line, float X, float Y, const FLinearColor& Color,
+		ETextJustify Justify = ETextJustify::Left);
+	/** An icon of the atlas at X, Y, tinted by Color (nothing without the atlas). */
+	void DrawHUDIcon(EShooterHUDIcon Icon, float X, float Y, const FLinearColor& Color);
+	/** The bottom rows' top: the numbers' line above the bottom margin. */
+	[[nodiscard]] float GetBottomRowY() const;
 	[[nodiscard]] float GetWorldTime() const;
 	/** Line.Update, counted in NumTextFormats. */
 	template <typename FormatType>
-	void UpdateText(FShooterHUDText& Line, const FShooterHUDTextKey& Key, FormatType&& Format)
+	void UpdateText(
+		FShooterHUDText& Line, const FShooterHUDTextKey& Key, FormatType&& Format, const UFont* InFont = nullptr)
 	{
-		NumTextFormats += Line.Update(Key, Forward<FormatType>(Format)) ? 1 : 0;
+		NumTextFormats += Line.Update(Key, Forward<FormatType>(Format), InFont) ? 1 : 0;
 	}
 
-	/** One kill feed line: its three parts, measured. */
+	/** One kill feed line: the names, measured, and the icons. */
 	struct FKillFeedLine
 	{
 		FShooterHUDText Killer;
-		FShooterHUDText Middle;
 		FShooterHUDText Victim;
+		EShooterHUDIcon Icon = EShooterHUDIcon::World;
+		bool bHeadshot = false;
 	};
+
+	/** The icons' atlas and the fonts, loaded at BeginPlay. */
+	UPROPERTY(Transient)
+	UTexture2D* IconsTexture = nullptr;
+	UPROPERTY(Transient)
+	UFont* NumberFont = nullptr;
+	UPROPERTY(Transient)
+	UFont* BoldFont = nullptr;
+	UPROPERTY(Transient)
+	UShooterScoreboardWidget* ScoreboardWidget = nullptr;
 
 	/** The lines of text kept between frames (FShooterHUDText). */
 	FShooterHUDText MoneyText;
-	FShooterHUDText StatusText;
+	FShooterHUDText HealthText;
+	FShooterHUDText ArmorText;
 	FShooterHUDText WeaponText;
-	FShooterHUDText ItemsText;
+	FShooterHUDText AmmoText;
 	FShooterHUDText ClockText;
 	FShooterHUDText CTScoreText;
 	FShooterHUDText TScoreText;
 	FShooterHUDText RoundText;
 	FShooterHUDText MessageText;
-	FShooterHUDText ScoreboardCTText;
-	FShooterHUDText ScoreboardTText;
 	FShooterHUDText SpectatorText;
 	FShooterHUDText PickupText;
 	bool bPickupNoticeShown = false;
+	/** The frame readout, and the frames and seconds it is averaging. */
+	FShooterHUDText FrameStatsText;
+	bool bFrameStatsShown = false;
+	int32 FrameStatsFrames = 0;
+	double FrameStatsSeconds = 0.0;
 	/** The bomb sites' letters on the radar (the game mode's sites, made once). */
 	TArray<FString> RadarSiteLabels;
 	int32 NumRadarPrimitives = 0;
@@ -316,6 +444,7 @@ private:
 	/** The kill feed's lines, formatted when the game state's feed changes (its serial). */
 	TArray<FKillFeedLine> KillFeedLines;
 	int32 KillFeedSerial = -1;
+	int32 NumKillFeedLinesDrawn = 0;
 
 	/** One radio line: the sender's part (in the team's colour) and the message. */
 	struct FRadioLine
@@ -333,18 +462,15 @@ private:
 	TArray<FShooterHUDText> RadioMenuLines;
 	int32 RadioMenuShown = 0;
 	int32 NumRadioMenuLines = 0;
-	/** What the scoreboard showed (each player's state, team, kills, deaths, money and life), and this frame's. */
-	TArray<int64> ScoreboardKey;
-	TArray<int64> NewScoreboardKey;
 	int32 NumTextFormats = 0;
 };
 
 /**
- * The buy menu (CS's), a tree of UMG widgets: a bordered vertical box at the top-left with the page's name and the
- * money, why buying is refused (outside a buy zone, after the buy time), the lines of the page
- * (AShooterPlayerController::GetBuyMenuEntries) on their number keys, a category with '>', an item with its price
- * (grey when it cannot be bought now; '>' before the number marks the pad's highlighted line; the lines a page does not
- * use collapsed) and the last buy's result. NativeTick refreshes it from the game, and collapses it while the owner's
+ * The buy menu (CS's), a tree of UMG widgets: a bordered vertical box at the top left, under the radar: a heading with
+ * the page's name and the money, why buying is refused (outside a buy zone, after the buy time), the page's lines
+ * (AShooterPlayerController::GetBuyMenuEntries) in a UTableView (their number key, the category or the item's display
+ * name, its price; a category's line in amber with '>', an item grey when it cannot be bought now; the pad's line
+ * highlighted) and the last buy's result. NativeTick refreshes it from the game, and collapses it while the owner's
  * menu is closed.
  */
 UCLASS()
@@ -363,16 +489,21 @@ public:
 	{
 		return Panel;
 	}
-	/** The line of the entry at Index of the page (GetBuyMenuEntries), or null. */
-	[[nodiscard]] UTextBlock* GetItemText(int32 Index) const
+	/** The page's lines: a row an entry of GetBuyMenuEntries, in their order (columns Key, Item, Price). */
+	[[nodiscard]] UTableView* GetItemTable() const
 	{
-		return ItemTexts.IsValidIndex(Index) ? ItemTexts[Index] : nullptr;
+		return ItemTable;
 	}
 	/** How many lines of text the menu has set (a line is set only when what it shows changes). */
 	[[nodiscard]] int32 GetNumTextFormats() const
 	{
 		return NumTextFormats;
 	}
+
+	/** The colours of an item that can and cannot be bought now, and of a category. */
+	static const FLinearColor AffordableColor;
+	static const FLinearColor UnaffordableColor;
+	static const FLinearColor CategoryColor;
 
 private:
 	/** Adds a text line to the box. */
@@ -381,6 +512,7 @@ private:
 	void SetLineText(UTextBlock& Block, FString& Shown, const FString& Text);
 
 	/** What the lines show: set again only when it changes (FShooterHUDText; the refusal and the last buy as text). */
+	FShooterHUDText TitleLine;
 	FShooterHUDText MoneyLine;
 	FString ShownRefusal;
 	TArray<FShooterHUDText> ItemLines;
@@ -390,11 +522,13 @@ private:
 	UPROPERTY()
 	UBorder* Panel = nullptr;
 	UPROPERTY()
+	UTextBlock* TitleText = nullptr;
+	UPROPERTY()
 	UTextBlock* MoneyText = nullptr;
 	UPROPERTY()
 	UTextBlock* RefusalText = nullptr;
 	UPROPERTY()
-	TArray<UTextBlock*> ItemTexts;
+	UTableView* ItemTable = nullptr;
 	UPROPERTY()
 	UTextBlock* LastBuyText = nullptr;
 };

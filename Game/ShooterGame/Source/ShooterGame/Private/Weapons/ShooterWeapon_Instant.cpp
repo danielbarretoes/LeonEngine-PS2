@@ -511,6 +511,7 @@ AShooterWeapon_Glock::AShooterWeapon_Glock(const FObjectInitializer& ObjectIniti
 	: Super(ObjectInitializer)
 {
 	WeaponName = TEXT("glock");
+	DisplayName = TEXT("Glock-18");
 	Slot = EShooterWeaponSlot::Secondary;
 	bAutomatic = false;
 	AmmoPerClip = 20;
@@ -549,6 +550,7 @@ AShooterWeapon_USP::AShooterWeapon_USP(const FObjectInitializer& ObjectInitializ
 	: Super(ObjectInitializer)
 {
 	WeaponName = TEXT("usp");
+	DisplayName = TEXT("USP");
 	Slot = EShooterWeaponSlot::Secondary;
 	bAutomatic = false;
 	AmmoPerClip = 12;
@@ -583,6 +585,7 @@ AShooterWeapon_Deagle::AShooterWeapon_Deagle(const FObjectInitializer& ObjectIni
 	: Super(ObjectInitializer)
 {
 	WeaponName = TEXT("deagle");
+	DisplayName = TEXT("Desert Eagle");
 	Slot = EShooterWeaponSlot::Secondary;
 	bAutomatic = false;
 	AmmoPerClip = 7;
@@ -618,6 +621,7 @@ AShooterWeapon_MP5::AShooterWeapon_MP5(const FObjectInitializer& ObjectInitializ
 	: Super(ObjectInitializer)
 {
 	WeaponName = TEXT("mp5");
+	DisplayName = TEXT("MP5");
 	Slot = EShooterWeaponSlot::Primary;
 	bAutomatic = true;
 	AmmoPerClip = 30;
@@ -659,6 +663,7 @@ AShooterWeapon_AK47::AShooterWeapon_AK47(const FObjectInitializer& ObjectInitial
 	: Super(ObjectInitializer)
 {
 	WeaponName = TEXT("ak47");
+	DisplayName = TEXT("AK-47");
 	Slot = EShooterWeaponSlot::Primary;
 	BuyTeam = EShooterTeam::T;
 	bAutomatic = true;
@@ -704,6 +709,7 @@ AShooterWeapon_M4A1::AShooterWeapon_M4A1(const FObjectInitializer& ObjectInitial
 	: Super(ObjectInitializer)
 {
 	WeaponName = TEXT("m4a1");
+	DisplayName = TEXT("M4A1");
 	Slot = EShooterWeaponSlot::Primary;
 	BuyTeam = EShooterTeam::CT;
 	bAutomatic = true;

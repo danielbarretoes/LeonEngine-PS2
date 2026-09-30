@@ -430,6 +430,17 @@ void AShooterPlayerController::SetToggleCrouch(int32 Toggle)
 	SavePersistentUser();
 }
 
+void AShooterPlayerController::SetShowFrameStats(int32 Show)
+{
+	GetPersistentUser()->bShowFrameStats = Show != 0;
+	SavePersistentUser();
+}
+
+bool AShooterPlayerController::IsFrameStatsShown() const
+{
+	return PersistentUser == nullptr || PersistentUser->bShowFrameStats;
+}
+
 void AShooterPlayerController::PlayFireForceFeedback()
 {
 	if (IsLocalController())
@@ -954,9 +965,14 @@ bool AShooterPlayerController::CanOpenBuyMenu(FString* OutReason) const
 	return GameMode == nullptr || GameMode->CanBuy(*ShooterPawn, OutReason);
 }
 
+void AShooterPlayerController::ShowScores(int32 Show)
+{
+	bShowScoreboard = Show != 0;
+}
+
 void AShooterPlayerController::NotifyPickup(const FString& ItemName)
 {
-	PickupMessage = FString::Printf(TEXT("Picked up %s"), *ItemName);
+	PickupMessage = FString::Printf(TEXT("Picked up %s"), *AShooterWeapon::GetItemDisplayName(ItemName));
 	const UWorld* World = GetWorld();
 	PickupTime = World != nullptr ? World->GetTimeSeconds() : 0.0f;
 }
@@ -1109,8 +1125,9 @@ void AShooterPlayerController::Buy(FString Item)
 		return;
 	}
 	FString Reason;
-	LastBuyMessage = GameMode->Buy(ShooterPawn, Item, &Reason) ? FString::Printf(TEXT("Bought %s"), *Item)
-															   : FString::Printf(TEXT("%s: %s"), *Item, *Reason);
+	const FString DisplayName = AShooterWeapon::GetItemDisplayName(Item);
+	LastBuyMessage = GameMode->Buy(ShooterPawn, Item, &Reason) ? FString::Printf(TEXT("Bought %s"), *DisplayName)
+															   : FString::Printf(TEXT("%s: %s"), *DisplayName, *Reason);
 	UE_LOG(LogShooter, Log, TEXT("Buy %s: %s"), *Item, *LastBuyMessage);
 }
 

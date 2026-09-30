@@ -330,6 +330,12 @@ public:
 	 * first-person model). Drawing a weapon puts the bomb away. False without a bomb, dead or already drawn.
 	 */
 	bool DrawBomb();
+	/**
+	 * The Fire key (CS): with the bomb drawn it plants while held, as Use does (StartUse / StopUse); otherwise the
+	 * weapon fires (StartWeaponFire / StopWeaponFire).
+	 */
+	void OnFirePressed();
+	void OnFireReleased();
 	/** The bomb is drawn (DrawBomb). */
 	[[nodiscard]] bool IsBombDrawn() const
 	{
@@ -695,6 +701,8 @@ private:
 	bool bIsPlanting = false;
 	/** The carried bomb is drawn (DrawBomb): no weapon in hand. */
 	bool bBombDrawn = false;
+	/** The plant was started by the Fire key, which stops it when released. */
+	bool bPlantingWithFire = false;
 	/** The team's default weapons were given (SpawnTeamInventory). */
 	bool bTeamInventoryGiven = false;
 	/** The last flash: when it began, its hold, fade and white, and when the blindness ends (world time). */

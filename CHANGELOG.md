@@ -138,6 +138,28 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   Tests: `System.Engine.World.Pause`, `System.Engine.Travel.OpenLevel`, `System.LeonEd.MapFactory.EngineMapsSkipRequiredTags`
   extended; `ShooterGame.Menu.MatchOptions`, `.DifficultyPresets`, `.BotSplit`, `.TeamChoiceAndChange`, `.PauseMenu`,
   `.MainMenuToMatchAndBack`, `ShooterGame.Settings.RoundTrip` extended (118 ShooterGame tests).
+- ShooterGame's HUD, scoreboard and buy menu are CS 1.6's ([ps2-polish](Docs/PLANS/ps2-polish.md) P6). The HUD:
+  the health and the armor bottom left with their icons, the ammunition (`clip | reserve`), the weapon and the money
+  (the buy zone's cart while the player may buy) bottom right, the bomb (blinking in a site) and the defuse kit on the
+  left, the clock with a stopwatch between the scores top centre, the kill feed top right with the weapons' icons, the
+  headshot's and a skull for the world, and a compact frame readout under the radar (`30 fps  33.3 ms`, the option
+  `bShowFrameStats`, `SetShowFrameStats 0|1`, saved on the memory card). The numbers in DejaVu Sans Condensed Bold at
+  24 px and the headings at 14 px (`/Engine/EngineFonts/DejaVuSansCondensedBold24` / `14`, vendored from the same
+  release, `Engine/SourceArt/LICENSES.md`); every text and icon over the world with a black drop shadow and the top
+  blocks on dark bands, readable on a bright sky. The icons are one atlas, `/Game/UI/T_HUDIcons`, drawn by
+  `SourceArt/UI/make_hud_icons.py` (Python's standard library, the same bytes every run; PSMT4 once cooked). The
+  weapons have CS's display names (`AShooterWeapon::DisplayName`, `GetItemDisplayName`: "AK-47", "Desert Eagle",
+  "HE Grenade", ...) in the HUD, the kill feed, the buy menu and the notices (`Picked up AK-47`, `Bought M4A1`). The
+  scoreboard is `UShooterScoreboardWidget`: a `UTableView` a team (name, DEAD / BOMB, score, deaths, BOT or latency)
+  sorted by score, the player's row highlighted, the team's score over it; the buy menu's page is a `UTableView` (key,
+  name, price; categories amber, what the player cannot afford grey, the pad's line highlighted). With the C4 drawn,
+  Fire plants it while held (`AShooterCharacter::OnFirePressed`), as E does. The canvas gains UE's icons
+  (`FCanvasIcon`, `FCanvas::MakeIcon` / `DrawIcon`) and triangle items (`FCanvasTriangleItem`, `FCanvasUVTri`, drawn
+  in the tiles' order). Captures: `-ExecCmdsAfterFrames=N` (not in Shipping) holds `-ExecCmds=` until frame N, and
+  `ShowScores 0|1` shows the scoreboard. Tests: `ShooterGame.HUD.IconAtlas`, `.DisplayNames`, `.KillFeedIcons`,
+  `.Scoreboard`, `.BuyMenuTable`, `.FrameStats`, `ShooterGame.Input.FirePlantsTheBomb`,
+  `System.Engine.Canvas.TrianglesAndIcons`; `HUD.RoundInfo`, `HUD.TextCache`, `Settings.RoundTrip` and the pickup tests
+  updated (590 engine tests, 119 ShooterGame tests). The bot match is unchanged.
 
 ### Changed
 
@@ -206,6 +228,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   text's scale argument and `FPaintContext::MeasureTextOnly` ([ps2-polish](Docs/PLANS/ps2-polish.md) P5, D10):
   `UFont`, `FCanvas::DrawText` / `MeasureText` with a font, `UFont::GetLineHeight`. `CheckBannedApis.ps1` rejects them.
   No third-party library builds for the PS2 any more; STB is desktop-only (LeonEd's `stb_image` and `stb_truetype`).
+- ShooterGame's hand-drawn scoreboard (`AShooterHUD::DrawScoreboard` and its space-aligned lines) and the HUD's `C4` /
+  `KIT` text ([ps2-polish](Docs/PLANS/ps2-polish.md) P6, D10): `UShooterScoreboardWidget` and the HUD's icons.
+  `CheckBannedApis.ps1` rejects them.
 
 ### Fixed
 

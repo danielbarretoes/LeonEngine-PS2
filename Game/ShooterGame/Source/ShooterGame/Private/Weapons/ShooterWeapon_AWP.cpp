@@ -9,6 +9,7 @@ AShooterWeapon_AWP::AShooterWeapon_AWP(const FObjectInitializer& ObjectInitializ
 {
 	// CS's AWP; DefaultGame.ini's [/Script/ShooterGame.ShooterWeapon_AWP] tunes it.
 	WeaponName = TEXT("awp");
+	DisplayName = TEXT("AWP");
 	Slot = EShooterWeaponSlot::Primary;
 	bAutomatic = false;
 	AmmoPerClip = 10;

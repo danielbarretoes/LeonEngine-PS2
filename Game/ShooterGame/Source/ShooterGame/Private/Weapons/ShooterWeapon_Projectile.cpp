@@ -110,6 +110,7 @@ AShooterWeapon_HEGrenade::AShooterWeapon_HEGrenade(const FObjectInitializer& Obj
 {
 	// CS's HE grenade; DefaultGame.ini's [/Script/ShooterGame.ShooterWeapon_HEGrenade] tunes it.
 	WeaponName = TEXT("hegrenade");
+	DisplayName = TEXT("HE Grenade");
 	Slot = EShooterWeaponSlot::Grenade;
 	GrenadeOrder = 0;
 	bAutomatic = false;
@@ -129,6 +130,7 @@ AShooterWeapon_Flashbang::AShooterWeapon_Flashbang(const FObjectInitializer& Obj
 {
 	// CS's flashbang: two a player; DefaultGame.ini's [/Script/ShooterGame.ShooterWeapon_Flashbang] tunes it.
 	WeaponName = TEXT("flashbang");
+	DisplayName = TEXT("Flashbang");
 	Slot = EShooterWeaponSlot::Grenade;
 	GrenadeOrder = 1;
 	ProjectileClass = AShooterProjectile_Flashbang::StaticClass();
@@ -148,6 +150,7 @@ AShooterWeapon_SmokeGrenade::AShooterWeapon_SmokeGrenade(const FObjectInitialize
 {
 	// CS's smoke grenade; DefaultGame.ini's [/Script/ShooterGame.ShooterWeapon_SmokeGrenade] tunes it.
 	WeaponName = TEXT("smokegrenade");
+	DisplayName = TEXT("Smoke Grenade");
 	Slot = EShooterWeaponSlot::Grenade;
 	GrenadeOrder = 2;
 	ProjectileClass = AShooterProjectile_Smoke::StaticClass();

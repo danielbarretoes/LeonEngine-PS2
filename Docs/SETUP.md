@@ -94,8 +94,9 @@ default pawn is `ADefaultPawn`). A map that cannot be opened logs `Failed to ent
 FixedStepsPerSecond`, [ps2-shipping](PLANS/ps2-shipping.md) D4), paced to the clock unless `-benchmark` (one step a
 frame, as fast as it can); `-showstats` shows the HUD stats;
 `-AxesGizmo` starts with the axes gizmo on; `-ExecCmds=` runs console commands (separated by `;` or `,`) on the first
-frame, for example `-ExecCmds="stat unit;FOV 75"`; `-Screenshot=` saves frame `-ExitAfterFrames=` (default 60) as a
-24-bit BMP and exits, and `-ExitAfterFrames=N` alone exits after frame N (headless too). In PowerShell quote an
+frame, for example `-ExecCmds="stat unit;FOV 75"` (`-ExecCmdsAfterFrames=N` holds them until frame N, not in
+Shipping: a capture of what only exists once the match plays, the buy menu or the scoreboard); `-Screenshot=` saves
+frame `-ExitAfterFrames=` (default 60) as a 24-bit BMP and exits, and `-ExitAfterFrames=N` alone exits after frame N (headless too). In PowerShell quote an
 argument that has a dot after `=` (`"-map=D:\Work\Maps\Arena.lmap"`), or PowerShell splits it at the dot.
 
 In the window (`Engine/Config/BaseInput.ini`): mouse look (the cursor is captured), **WASD** or the arrows fly along the

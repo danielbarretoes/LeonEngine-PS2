@@ -64,6 +64,12 @@ private:
 	/** -ExitAfterFrames=N: the game exits after frame N (Leon). */
 	int32 ExitAfterFrames = 0;
 	/**
+	 * -ExecCmdsAfterFrames=N (Leon, not in Shipping): -ExecCmds= run at the start of frame N instead of the first, held
+	 * in DelayedCommands until then.
+	 */
+	int32 ExecCmdsAfterFrames = 0;
+	TArray<FString> DelayedCommands;
+	/**
 	 * -ExitAfterSeconds=N: the game exits once N seconds passed since Init (Leon; a measured run's bound, MeasurePS2),
 	 * and when Init ended (FPlatformTime::Cycles64).
 	 */

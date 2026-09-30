@@ -10,12 +10,8 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 - **Minimap.** The radar (N30d) shows dots on a black square. It needs the map's real overview image, like CS's
   overviews: a top-down render of the map, generated at cook time and paletted, drawn under the dots and rotated with
   the view.
-- **UI.** A better HUD. The font family (DejaVu Sans Condensed, `UFont`), the textured canvas and UMG's buttons, focus,
-  switcher and table exist since [ps2-polish](PLANS/ps2-polish.md) P5, and the main, team and pause menus are built on
-  them since P9; the HUD only changed its font.
-- **The scoreboard in a table.** `AShooterHUD` still draws the scoreboard by hand, aligned with spaces (which the
-  proportional font no longer lines up); UMG's `UTableView` (P5) is for it. The CS scoreboard shows per team: name,
-  score (kills), deaths, latency or bot, alive/dead, and the bomb carrier for T.
+- **UI.** The HUD, the scoreboard and the buy menu are CS 1.6's since [ps2-polish](PLANS/ps2-polish.md) P6
+  (icons, the bold font, `UTableView`), the main, team and pause menus since P9.
 
 ShooterGame stays single player against bots: no split screen (decided 2026-09-30).
 

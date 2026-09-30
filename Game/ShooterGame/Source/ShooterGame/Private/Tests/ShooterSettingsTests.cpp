@@ -26,7 +26,7 @@ bool FShooterSettingsRoundTripTest::RunTest(const FString& Parameters)
 	TStrongObjectPtr<UShooterPersistentUser> Defaults(UShooterPersistentUser::LoadPersistentUser(0));
 	TestTrue("The defaults without a save",
 		Defaults.IsValid() && Defaults->AimSensitivity == 1.0f && !Defaults->bInvertedYAxis &&
-			Defaults->SoundVolume == 1.0f && Defaults->bToggleCrouch);
+			Defaults->SoundVolume == 1.0f && Defaults->bToggleCrouch && Defaults->bShowFrameStats);
 	Defaults->AimSensitivity = 1.75f;
 	Defaults->bInvertedYAxis = true;
 	Defaults->SoundVolume = 0.3f;
@@ -42,6 +42,7 @@ bool FShooterSettingsRoundTripTest::RunTest(const FString& Parameters)
 	Match.RoundsToWin = 16;
 	Match.NumBots = 5;
 	Defaults->SetMatchSettings(Match);
+	Defaults->bShowFrameStats = false;
 	TestTrue("Saved", Defaults->SaveToSlot(0));
 	TestTrue("In the Settings slot", IFileManager::Get().FileExists(*(Dir + TEXT("Settings.sav"))));
 	TStrongObjectPtr<UShooterPersistentUser> Loaded(UShooterPersistentUser::LoadPersistentUser(0));
@@ -55,6 +56,7 @@ bool FShooterSettingsRoundTripTest::RunTest(const FString& Parameters)
 	TestTrue("Expert", LoadedMatch.BotDifficulty == EShooterBotDifficulty::Expert);
 	TestEqual("The first to 16", LoadedMatch.RoundsToWin, 16);
 	TestEqual("Five bots", LoadedMatch.NumBots, 5);
+	TestTrue("No frame readout", Loaded.IsValid() && !Loaded->bShowFrameStats);
 
 	IPlatformFeaturesModule::Get().SetSaveGameSystemOverride(nullptr);
 	IFileManager::Get().DeleteDirectory(*Dir, false, true);
