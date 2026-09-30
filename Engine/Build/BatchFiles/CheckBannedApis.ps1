@@ -71,6 +71,11 @@
 #   the skinned batches posed on the EE (bQuantizedPose, AllocatePosedStreams, QuantizePose, SkinBatch, PosedPositions /
 #   PosedNormals)                            -> removed in ps2-shipping N14b: VU1's Skinned programs with the palette
 #   ShooterGame's LoadOptionalAsset copies   -> removed in ps2-shipping N24b: LoadShooterObject / LoadShooterAsset
+#   the HUD's bitmap font (stb_easy_font, stb_easy_font_print / _width, HudFontScale, HudLineHeight,
+#   FCanvas::DrawTextBlock and the canvas text's scale argument)
+#                                            -> removed in ps2-polish P5: UFont (the engine's DejaVu Sans Condensed,
+#                                               UEngine::GetSmallFont ...), FCanvas::DrawText / MeasureText with a font,
+#                                               FCanvasTextItem, UFont::GetLineHeight
 #   FLegacyCoordinateConversion and LegacyCoordinateConversion.h
 #                                            -> UE-space data; only tests convert legacy (Y up, metres) data, the
 #                                               golden tables: see $TestsOnly
@@ -168,6 +173,9 @@ $Rules = @(
 		Use = "VU1's Skinned programs with the batch's palette (FGSCommandList::AllocateSkinPalette, MakeSkinPalette)" },
 	@{ Name = "ShooterGame's per-class optional asset loaders (ps2-shipping N24b)"; Pattern = '\bLoadOptionalAsset\b'
 		Use = "LoadShooterObject / LoadShooterAsset (ShooterGame), which resolve what is in memory and keep it" },
+	@{ Name = "the HUD's bitmap font (ps2-polish P5)"
+		Pattern = '\bstb_easy_font\w*|<stb_easy_font\.h>|\bHudFontScale\b|\bHudLineHeight\b|\bDrawTextBlock\b|\bMeasureTextOnly\b'
+		Use = "UFont (UEngine::GetTinyFont .. GetLargeFont), FCanvas::DrawText / MeasureText with a font, FCanvasTextItem, UFont::GetLineHeight; UMG's FSlateFontInfo" },
 	@{ Name = "legacy GL / transform / axes"; Pattern = 'LegacyGL|FLegacyTransform|LegacyAxes'
 		Use = "UE view and projection matrices (ToGLClipSpace last), FTransform, UE axes" },
 	@{ Name = "legacy coordinate conversion outside the tests"

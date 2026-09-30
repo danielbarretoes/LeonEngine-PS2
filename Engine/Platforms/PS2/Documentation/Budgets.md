@@ -391,6 +391,7 @@ is not the hardware, so each row names its PCSX2 and the hash of the settings it
 | N29 (on N24 and N30f; the floor slabs as the ground) | 29.81 | 33.6 ms | 33.5 / 33.5 / 33.5 ms | 368.3 ms | 4.9 ms | 8.4 ms | 0.07 + 2.9 ms | 0.17 ms | 17.7 ms (16.1) | 6 292 (before VU1 culls) | 19.1 KB (the EE's) | 4 261 KB | 1 804 | 2.8.2, d29e64bc |
 | 0.24.0 (the release, on N24b) | 29.95 | 33.38 ms | 33.50 / 33.50 / 33.50 ms | 50.05 ms | 4.67 ms | 8.42 ms | 0.07 + 2.89 ms | 0.17 ms | 17.74 ms (16.14) | 6 299 (before VU1 culls) | 19.1 KB (the EE's) | 4 432 KB | 1 804 | 2.8.2, d29e64bc |
 | ps2-polish P1 (the pawns' bodies Movable) | 29.95 | 33.38 ms | 33.50 / 33.50 / 33.50 ms | 50.05 ms | 4.74 ms | 8.53 ms | 0.07 + 2.89 ms | 0.17 ms | 17.56 ms (15.93) | 6 469 (before VU1 culls) | 19.2 KB (the EE's) | 4 432 KB | 1 804 | 2.8.2.0, d29e64bc |
+| ps2-polish P5 (fonts, the textured canvas; on P2b) | 29.98 | 33.36 ms | 33.50 / 33.50 / 33.50 ms | 50.07 ms | 4.57 ms | 9.15 ms | 0.18 + 1.45 ms | 0.18 ms | 18.44 ms (16.79) | 6 723 (before VU1 culls) | 22.1 KB (the EE's) | 4 289 KB | 1 831 | 2.8.2.0, d29e64bc |
 
 N13 ([ps2-shipping](../../../../Docs/PLANS/ps2-shipping.md) N13): the textures resident by blocks, mipmapped, their
 CLUTs loaded only when they change and the opaque draws grouped by texture. Its base has N16 and N20 too (the world

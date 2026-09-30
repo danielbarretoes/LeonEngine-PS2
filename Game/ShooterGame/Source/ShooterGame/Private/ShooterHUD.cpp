@@ -11,6 +11,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/Engine.h"
+#include "Engine/Font.h"
 #include "Engine/World.h"
 #include "GameFramework/GameModeBase.h"
 #include "ShooterBomb.h"
@@ -32,9 +33,25 @@ namespace
 	const FLinearColor BombColor(1.0f, 0.25f, 0.2f);
 	const FLinearColor RefusalColor(1.0f, 0.3f, 0.2f);
 
-	/** The HUD's layout on the 640 x 448 canvas, in lines of the HUD font (HudLineHeight). */
+	/** The HUD's font: the engine's small font (DejaVu Sans Condensed, 14 pixels). */
+	const UFont* HUDFont()
+	{
+		return UEngine::GetSmallFont();
+	}
+
+	/** A line of the HUD font, pixels. */
+	float HUDLineHeight()
+	{
+		const UFont* Font = HUDFont();
+		return Font != nullptr ? Font->GetLineHeight() : 0.0f;
+	}
+
+	/** The HUD's layout on the 640 x 448 canvas, in lines of the HUD font (HUDLineHeight). */
 	constexpr float EdgeMargin = 12.0f;
-	constexpr float LineStep = HudLineHeight + 4.0f;
+	float LineStep()
+	{
+		return HUDLineHeight() + 4.0f;
+	}
 
 	/** The buy menu's panel's top-left corner on the canvas (the refusal is drawn there too), below the radar. */
 	constexpr float BuyMenuTop = 112.0f;
@@ -109,7 +126,7 @@ namespace
 	/** A kept line centred on X. */
 	void DrawCentredText(FCanvas& Canvas, const FShooterHUDText& Line, float X, float Y, const FLinearColor& Color)
 	{
-		Canvas.DrawText(Line.Text, X - (Line.Width * 0.5f), Y, Color);
+		Canvas.DrawText(HUDFont(), Line.Text, X - (Line.Width * 0.5f), Y, Color);
 	}
 
 	/** A text centred on X (measured now: the lines that change with the round's events). */
@@ -117,8 +134,8 @@ namespace
 	{
 		float Width = 0.0f;
 		float Height = 0.0f;
-		FCanvas::MeasureText(Text, HudFontScale, Width, Height);
-		Canvas.DrawText(Text, X - (Width * 0.5f), Y, Color);
+		FCanvas::MeasureText(HUDFont(), Text, Width, Height);
+		Canvas.DrawText(HUDFont(), Text, X - (Width * 0.5f), Y, Color);
 	}
 
 } // namespace
@@ -126,7 +143,7 @@ namespace
 void FShooterHUDText::Set(const FString& InText)
 {
 	Text = InText;
-	FCanvas::MeasureText(Text, HudFontScale, Width, Height);
+	FCanvas::MeasureText(HUDFont(), Text, Width, Height);
 	bFormatted = true;
 }
 
@@ -294,9 +311,10 @@ void AShooterHUD::DrawRadar()
 			continue;
 		}
 		constexpr float LetterHalfWidth = 3.0f;
-		const FVector2D Offset = ProjectToRadar(Origin, Yaw, SiteLocation, RadarRange, HalfSize - HudLineHeight * 0.5f);
-		Canvas->DrawText(RadarSiteLabels[Index], CenterX + Offset.X - LetterHalfWidth,
-			CenterY + Offset.Y - (HudLineHeight * 0.5f), RadarSiteColor);
+		const FVector2D Offset =
+			ProjectToRadar(Origin, Yaw, SiteLocation, RadarRange, HalfSize - HUDLineHeight() * 0.5f);
+		Canvas->DrawText(HUDFont(), RadarSiteLabels[Index], CenterX + Offset.X - LetterHalfWidth,
+			CenterY + Offset.Y - (HUDLineHeight() * 0.5f), RadarSiteColor);
 		++NumRadarPrimitives;
 	}
 
@@ -419,7 +437,7 @@ void AShooterHUD::DrawSpectatorInfo()
 		return;
 	}
 	const float CenterX = static_cast<float>(Canvas->GetSizeX()) * 0.5f;
-	const float Y = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HudLineHeight;
+	const float Y = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HUDLineHeight();
 	DrawCentredText(*Canvas, SpectatorText, CenterX, Y, MessageColor);
 }
 
@@ -429,12 +447,12 @@ void AShooterHUD::DrawStatus()
 	const AShooterPlayerState* State =
 		PlayerOwner != nullptr ? PlayerOwner->GetPlayerState<AShooterPlayerState>() : nullptr;
 	const float Width = static_cast<float>(Canvas->GetSizeX());
-	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HudLineHeight;
+	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HUDLineHeight();
 	if (State != nullptr && GetShooterGameState() != nullptr)
 	{
 		const int32 Money = State->GetMoney();
 		UpdateText(MoneyText, MakeKey(Money), [Money]() { return FString::Printf(TEXT("$ %d"), Money); });
-		Canvas->DrawText(MoneyText.Text, EdgeMargin, Bottom - LineStep, StatusColor);
+		Canvas->DrawText(HUDFont(), MoneyText.Text, EdgeMargin, Bottom - LineStep(), StatusColor);
 	}
 	if (Pawn == nullptr)
 	{
@@ -454,7 +472,7 @@ void AShooterHUD::DrawStatus()
 			}
 			return Status;
 		});
-	Canvas->DrawText(StatusText.Text, EdgeMargin, Bottom, StatusColor);
+	Canvas->DrawText(HUDFont(), StatusText.Text, EdgeMargin, Bottom, StatusColor);
 	const AShooterWeapon* Weapon = Pawn->GetWeapon();
 	const int32 Clip = Weapon != nullptr ? Weapon->GetCurrentAmmoInClip() : 0;
 	const int32 Reserve = Weapon != nullptr ? Weapon->GetCurrentAmmo() : 0;
@@ -500,11 +518,12 @@ void AShooterHUD::DrawStatus()
 		});
 	if (!WeaponText.Text.IsEmpty())
 	{
-		Canvas->DrawText(WeaponText.Text, Width - WeaponText.Width - EdgeMargin, Bottom, StatusColor);
+		Canvas->DrawText(HUDFont(), WeaponText.Text, Width - WeaponText.Width - EdgeMargin, Bottom, StatusColor);
 	}
 	if (!ItemsText.Text.IsEmpty())
 	{
-		Canvas->DrawText(ItemsText.Text, Width - ItemsText.Width - EdgeMargin, Bottom - LineStep, BombColor);
+		Canvas->DrawText(
+			HUDFont(), ItemsText.Text, Width - ItemsText.Width - EdgeMargin, Bottom - LineStep(), BombColor);
 	}
 }
 
@@ -544,9 +563,9 @@ void AShooterHUD::DrawRoundInfo()
 	UpdateText(
 		RoundText, MakeKey(RoundNumber), [RoundNumber]() { return FString::Printf(TEXT("Round %d"), RoundNumber); });
 	constexpr float ScoreGap = 40.0f;
-	Canvas->DrawText(CTScoreText.Text, CenterX - ScoreGap - CTScoreText.Width, EdgeMargin, CTColor);
-	Canvas->DrawText(TScoreText.Text, CenterX + ScoreGap, EdgeMargin, TColor);
-	DrawCentredText(*Canvas, RoundText, CenterX, EdgeMargin + LineStep, FLinearColor(0.7f, 0.7f, 0.7f));
+	Canvas->DrawText(HUDFont(), CTScoreText.Text, CenterX - ScoreGap - CTScoreText.Width, EdgeMargin, CTColor);
+	Canvas->DrawText(HUDFont(), TScoreText.Text, CenterX + ScoreGap, EdgeMargin, TColor);
+	DrawCentredText(*Canvas, RoundText, CenterX, EdgeMargin + LineStep(), FLinearColor(0.7f, 0.7f, 0.7f));
 }
 
 void AShooterHUD::DrawKillFeed()
@@ -592,12 +611,12 @@ void AShooterHUD::DrawKillFeed()
 		float X = Width - EdgeMargin - Line.Killer.Width - Line.Middle.Width - Line.Victim.Width;
 		if (!Line.Killer.Text.IsEmpty())
 		{
-			Canvas->DrawText(Line.Killer.Text, X, Y, GetTeamColor(Entry.KillerTeam));
+			Canvas->DrawText(HUDFont(), Line.Killer.Text, X, Y, GetTeamColor(Entry.KillerTeam));
 		}
 		X += Line.Killer.Width;
-		Canvas->DrawText(Line.Middle.Text, X, Y, FColor::White);
+		Canvas->DrawText(HUDFont(), Line.Middle.Text, X, Y, FColor::White);
 		X += Line.Middle.Width;
-		Canvas->DrawText(Line.Victim.Text, X, Y, GetTeamColor(Entry.VictimTeam));
+		Canvas->DrawText(HUDFont(), Line.Victim.Text, X, Y, GetTeamColor(Entry.VictimTeam));
 		Y += Line.Victim.Height + 4.0f;
 	}
 }
@@ -644,14 +663,14 @@ void AShooterHUD::DrawRadio()
 		}
 	}
 	// Above the money, the newest at the bottom (CS's chat area).
-	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HudLineHeight;
-	float Y = Bottom - (LineStep * static_cast<float>(DrawnRadioLines.Num() + 1));
+	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HUDLineHeight();
+	float Y = Bottom - (LineStep() * static_cast<float>(DrawnRadioLines.Num() + 1));
 	for (const int32 Index : DrawnRadioLines)
 	{
 		const FRadioLine& Line = RadioLines[Index];
-		Canvas->DrawText(Line.Sender.Text, EdgeMargin, Y, Line.Color);
-		Canvas->DrawText(Line.Message.Text, EdgeMargin + Line.Sender.Width, Y, MessageColor);
-		Y += LineStep;
+		Canvas->DrawText(HUDFont(), Line.Sender.Text, EdgeMargin, Y, Line.Color);
+		Canvas->DrawText(HUDFont(), Line.Message.Text, EdgeMargin + Line.Sender.Width, Y, MessageColor);
+		Y += LineStep();
 	}
 }
 
@@ -696,12 +715,12 @@ void AShooterHUD::DrawRadioMenu()
 	}
 	const float X = EdgeMargin * 2.0f;
 	float Y = BuyMenuTop;
-	Canvas->DrawText(RadioMenuTitle.Text, X, Y, StatusColor);
+	Canvas->DrawText(HUDFont(), RadioMenuTitle.Text, X, Y, StatusColor);
 	++NumRadioMenuLines;
 	for (const FShooterHUDText& Line : RadioMenuLines)
 	{
-		Y += LineStep;
-		Canvas->DrawText(Line.Text, X, Y, MessageColor);
+		Y += LineStep();
+		Canvas->DrawText(HUDFont(), Line.Text, X, Y, MessageColor);
 		++NumRadioMenuLines;
 	}
 }
@@ -798,7 +817,7 @@ void AShooterHUD::DrawBuyRefusal()
 	{
 		return;
 	}
-	Canvas->DrawText(Controller->GetLastBuyMessage(), EdgeMargin * 2.0f, BuyMenuTop, RefusalColor);
+	Canvas->DrawText(HUDFont(), Controller->GetLastBuyMessage(), EdgeMargin * 2.0f, BuyMenuTop, RefusalColor);
 }
 
 void AShooterHUD::DrawPickupNotice()
@@ -816,8 +835,9 @@ void AShooterHUD::DrawPickupNotice()
 	UpdateText(PickupText, MakeKey(static_cast<int64>(Controller->GetPickupTime() * 1000.0f)),
 		[&Message]() { return Message; });
 	const float Width = static_cast<float>(Canvas->GetSizeX());
-	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HudLineHeight;
-	Canvas->DrawText(PickupText.Text, Width - PickupText.Width - EdgeMargin, Bottom - (2.0f * LineStep), StatusColor);
+	const float Bottom = static_cast<float>(Canvas->GetSizeY()) - EdgeMargin - HUDLineHeight();
+	Canvas->DrawText(
+		HUDFont(), PickupText.Text, Width - PickupText.Width - EdgeMargin, Bottom - (2.0f * LineStep()), StatusColor);
 	bPickupNoticeShown = true;
 }
 
@@ -855,7 +875,7 @@ void AShooterHUD::DrawProgress()
 	const float Y = static_cast<float>(Canvas->GetSizeY()) * 0.62f;
 	constexpr float BarWidth = 300.0f;
 	constexpr float BarHeight = 12.0f;
-	DrawCentredText(*Canvas, Label, CenterX, Y - LineStep, MessageColor);
+	DrawCentredText(*Canvas, Label, CenterX, Y - LineStep(), MessageColor);
 	Canvas->DrawTile(CenterX - (BarWidth * 0.5f), Y, BarWidth, BarHeight, FLinearColor(0.1f, 0.1f, 0.1f, 0.8f));
 	Canvas->DrawTile(CenterX - (BarWidth * 0.5f), Y, BarWidth * Fraction, BarHeight, StatusColor);
 }
@@ -1002,8 +1022,8 @@ void AShooterHUD::DrawScoreboard()
 	Canvas->DrawTile(Width * 0.1f, Top, Width * 0.8f,
 		FMath::Max(ScoreboardCTText.Height, ScoreboardTText.Height) + (2.0f * Padding),
 		FLinearColor(0.0f, 0.0f, 0.0f, 0.6f));
-	Canvas->DrawText(ScoreboardCTText.Text, Width * 0.12f, Top + Padding, CTColor);
-	Canvas->DrawText(ScoreboardTText.Text, Width * 0.54f, Top + Padding, TColor);
+	Canvas->DrawText(HUDFont(), ScoreboardCTText.Text, Width * 0.12f, Top + Padding, CTColor);
+	Canvas->DrawText(HUDFont(), ScoreboardTText.Text, Width * 0.54f, Top + Padding, TColor);
 }
 
 // The buy menu

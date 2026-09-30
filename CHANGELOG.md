@@ -9,6 +9,40 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Fonts, a textured canvas and UMG's missing widgets, the base of the new UI ([ps2-polish](Docs/PLANS/ps2-polish.md)
+  P5).
+  - `UFont` (UE's offline font) and its importer, `UTrueTypeFontFactory` (LeonEd, `-type=Font`, `.ttf`, stb_truetype):
+    the glyphs of `UnicodeRange` (ASCII and Latin-1, so Spanish) rasterized at `Height` pixels into PF_P4 pages of at
+    most 256 x 256 (white texels, the coverage in the CLUT's alpha, 16 levels), with whole-pixel advances, bearings and
+    kerning pairs; the same file gives the same bytes. The engine's font is DejaVu Sans Condensed 2.37
+    (`Engine/SourceArt/EngineFonts`, the Bitstream Vera license with the DejaVu changes in the public domain;
+    `Engine/SourceArt/LICENSES.md`), imported at 10, 14, 20 and 32 pixels as `/Engine/EngineFonts/DejaVuSansCondensed*`,
+    one page each; `UEngine::GetTinyFont`, `GetSmallFont`, `GetMediumFont` and `GetLargeFont` load them
+    (`[/Script/Engine.Engine] TinyFontName ...`).
+  - The canvas draws text in a font, a textured SPRITE a glyph laid out by its metrics and kerning, UTF-8 decoded
+    (`FCanvas::DrawText(Font, ...)`, `MeasureText(Font, ...)`, `DrawShadowedString`, `FCanvasTextItem` with a shadow or
+    an outline), and textured tiles (`DrawTile` with a `UTexture`, UVs, colour and alpha; `FCanvasTileItem` with a
+    rotation about a pivot: two UV triangles). `FGSSceneRenderer::DrawCanvas` samples them through the texture cache
+    (UV, MODULATE, nearest one to one and bilinear otherwise), after the GS conformance scene `TexturedCanvas` (D7:
+    GSReference, the OpenGL emulator and GSConformance.elf in PCSX2).
+  - UMG: `UHorizontalBox` / `UHorizontalBoxSlot` (automatic and fill sizes), `UButton` (`FButtonStyle`; `OnClicked`,
+    `OnPressed`, `OnReleased`, `OnHovered`, `OnUnhovered`), `UWidgetSwitcher`, `UTableView` (columns with a header, a
+    width and an alignment, rows sorted by a column, a highlighted row; cached text widths), `UImage` with a texture
+    brush (`FSlateBrush`, `SetBrushFromTexture`), `UTextBlock` with a font (`FSlateFontInfo`) and a shadow. Focus and
+    navigation, small and UE-like: `AHUD::InputKey` gives the widgets the keys before the game, the focused widget and
+    its parents first, then the arrows, the d-pad and Tab move the focus to the nearest focusable widget painted that
+    way (`FHittestGrid`, explicit rules), Accept (Enter, Space, the pad's Cross) presses a button and clicks on the
+    release; on Win64 the free mouse hovers and clicks (`AHUD::InputMouseMove`,
+    `IRendererModule::WindowToRenderTarget`). SlateCore gains `FGeometry`, `FReply`, `FKeyEvent` / `FPointerEvent`,
+    `EUINavigation` and `FNavigationConfig`.
+  - Tests: `System.Engine.Font.MetricsAndKerning`, `System.Engine.Canvas.TextGlyphs`, `.TexturedTile`,
+    `System.LeonEd.Factories.TrueTypeFont.Rasterize` and `.Import` (byte-identical reimport),
+    `System.GSReference.Texture.TexturedCanvas`, `System.Renderer.GS.Canvas.Text` (the reference's frame),
+    `System.Renderer.GSEmulator.CanvasFrame` (the emulator against it), `System.UMG.Focus.Navigation`,
+    `System.UMG.Button.Activation`, `System.UMG.Panels.HorizontalBoxAndSwitcher`, `System.UMG.Image.Texture`,
+    `System.UMG.TableView.SortAndLayout` (588 engine tests, 105 of ShooterGame); `ShooterGame.HUD.RoundInfo` counts
+    the glyphs' sprites.
+
 - ShooterGame's crouch toggles, and the bomb and the weapons are dropped and picked up as in CS
   ([ps2-polish](Docs/PLANS/ps2-polish.md) P4): a press of the crouch key (Left Ctrl, Circle) crouches and the next
   stands up, the default; the player's option `bToggleCrouch` (`UShooterPersistentUser`, the `Settings` slot on the
@@ -24,6 +58,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- ShooterGame's HUD, the buy menu and the debug overlay draw in the engine's 14-pixel DejaVu Sans Condensed instead of
+  stb_easy_font's bars ([ps2-polish](Docs/PLANS/ps2-polish.md) P5); the HUD's layout is unchanged (P6 redesigns it,
+  and its scoreboard, aligned with spaces, no longer lines up in the proportional font). The canvas now blends every
+  tile and line by its colour's alpha (it drew them opaque), so the flash's white-out fades and the scoreboard's and
+  the buy menu's backgrounds are as translucent as their colours say. A glyph is one sprite (four GS writes) where
+  stb_easy_font drew several bars: in PCSX2 the canvas's EE time falls from 2.89 to 1.45 ms a frame (`Canvas Flush`;
+  `GS Canvas` 1.33 ms) and the widgets' paint rises from 0.07 to 0.18 ms, at 29.98 fps, p50 / p95 / p99 33.5 ms
+  (Budgets.md, the row «ps2-polish P5»).
 - ShooterGame's accuracy follows CS 1.6's cases for crouched, still, walking, running and in the air
   ([ps2-polish](Docs/PLANS/ps2-polish.md) P2). Every hitscan weapon had the same `CrouchingSpreadMod` (0.8), and
   walking had no term of its own. Now the movement's term grows with the speed to `WalkingSpread` at `WalkingSpeed`
@@ -47,6 +89,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   the full order, the AK-47 walking as still); `Bots.RecoilKicksTheAim` allows 2 degrees instead of 1.5, the bot
   strafing at a walk while it sprays (105 ShooterGame tests). The bot match changes:
   `Botmatch OK: 10 round(s), CT 5 - T 5, 63 kill(s), seed 7, sides switched after round 5`.
+
+### Removed
+
+- `stb_easy_font` (the HUD's bitmap font), `HudFontScale`, `HudLineHeight`, `FCanvas::DrawTextBlock`, the canvas
+  text's scale argument and `FPaintContext::MeasureTextOnly` ([ps2-polish](Docs/PLANS/ps2-polish.md) P5, D10):
+  `UFont`, `FCanvas::DrawText` / `MeasureText` with a font, `UFont::GetLineHeight`. `CheckBannedApis.ps1` rejects them.
+  No third-party library builds for the PS2 any more; STB is desktop-only (LeonEd's `stb_image` and `stb_truetype`).
 
 ### Fixed
 

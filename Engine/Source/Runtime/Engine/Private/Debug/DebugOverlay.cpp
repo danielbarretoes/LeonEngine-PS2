@@ -1,16 +1,14 @@
 #include "Debug/DebugOverlay.h"
 
 #include "CanvasTypes.h"
+#include "Engine/Engine.h"
+#include "Engine/Font.h"
 
 namespace
 {
 
-	/** The font's own pixels on the 640 x 448 canvas (HudFontScale). */
-	constexpr float HudPixelScale = 1.0f;
-	constexpr float MessagePixelScale = 1.0f;
 	constexpr float MarginX = 10.0f;
 	constexpr float MarginY = 10.0f;
-	constexpr float MessageLineStepY = 14.0f * MessagePixelScale;
 	constexpr float FadeTailSeconds = 0.5f;
 	constexpr int32 MaxOnScreenMessages = 12;
 	/** The overlay draws behind the HUD's widgets (higher depth sort keys are drawn first). */
@@ -96,7 +94,7 @@ float FDebugOverlay::GetRightTextBottom() const
 	}
 	float Width = 0.0f;
 	float Height = 0.0f;
-	FCanvas::MeasureText(RightText, HudPixelScale, Width, Height);
+	FCanvas::MeasureText(UEngine::GetSmallFont(), RightText, Width, Height);
 	return RightTextOriginY + Height;
 }
 
@@ -108,12 +106,18 @@ void FDebugOverlay::Draw(FCanvas& Canvas) const
 	constexpr FColor BottomLeftColor(200, 210, 220);
 	constexpr FColor CenterColor(255, 210, 90);
 	constexpr FColor RightColor(240, 240, 245);
-	constexpr float LineStepY = 14.0f * HudPixelScale;
+	// The overlay's text is in the engine's small font, its lines the font's line height apart.
+	const UFont* Font = UEngine::GetSmallFont();
+	if (Font == nullptr)
+	{
+		return;
+	}
+	const float LineStepY = Font->GetLineHeight();
 
 	Canvas.PushDepthSortKey(OverlayDepthSortKey);
 
 	// Top-left HUD block (FPS / tools).
-	Canvas.DrawTextBlock(Text, MarginX, MarginY, LeftColor, HudPixelScale);
+	Canvas.DrawText(Font, Text, MarginX, MarginY, LeftColor);
 
 	if (!BottomLeftText.IsEmpty())
 	{
@@ -126,24 +130,23 @@ void FDebugOverlay::Draw(FCanvas& Canvas) const
 			}
 		}
 		const float OriginY = FramebufferHeight - MarginY - (LineStepY * static_cast<float>(LineCount));
-		Canvas.DrawTextBlock(BottomLeftText, MarginX, OriginY, BottomLeftColor, HudPixelScale);
+		Canvas.DrawText(Font, BottomLeftText, MarginX, OriginY, BottomLeftColor);
 	}
 
 	if (!CenterText.IsEmpty())
 	{
 		float BlockWidth = 0.0f;
 		float BlockH = 0.0f;
-		FCanvas::MeasureText(CenterText, HudPixelScale, BlockWidth, BlockH);
+		FCanvas::MeasureText(Font, CenterText, BlockWidth, BlockH);
 		// Vertically center; clamp so short windows still keep the block on-screen.
 		float OriginY = (FramebufferHeight - BlockH) * 0.5f;
 		OriginY = FMath::Clamp(OriginY, MarginY, FMath::Max(MarginY, FramebufferHeight - BlockH - MarginY));
 		// Each line centered — long Main Menu hints must not left-bias short rows.
-		Canvas.DrawText(CenterText, FramebufferWidth * 0.5f, OriginY, CenterColor, HudPixelScale, ETextJustify::Center);
+		Canvas.DrawText(Font, CenterText, FramebufferWidth * 0.5f, OriginY, CenterColor, ETextJustify::Center);
 	}
 
 	// Right-aligned block (stats top-right / level chrome bottom-right).
-	Canvas.DrawText(
-		RightText, FramebufferWidth - MarginX, RightTextOriginY, RightColor, HudPixelScale, ETextJustify::Right);
+	Canvas.DrawText(Font, RightText, FramebufferWidth - MarginX, RightTextOriginY, RightColor, ETextJustify::Right);
 
 	// Top-left debug console: newest at the fixed top slot; older lines shift down (+Y).
 	float LocalY = MarginY;
@@ -155,8 +158,8 @@ void FDebugOverlay::Draw(FCanvas& Canvas) const
 		{
 			Alpha = FMath::Clamp(Msg.TimeRemaining / FadeTailSeconds, 0.0f, 1.0f);
 		}
-		Canvas.DrawTextBlock(Msg.Text, MarginX, LocalY, ColorWithAlpha(Msg.Color, Alpha), MessagePixelScale);
-		LocalY += MessageLineStepY;
+		Canvas.DrawText(Font, Msg.Text, MarginX, LocalY, ColorWithAlpha(Msg.Color, Alpha));
+		LocalY += LineStepY;
 		if (LocalY > FramebufferHeight - MarginY)
 		{
 			break;

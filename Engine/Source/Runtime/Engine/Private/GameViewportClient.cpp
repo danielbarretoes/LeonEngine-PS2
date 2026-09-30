@@ -253,6 +253,19 @@ void UGameViewportClient::ProcessInput(float DeltaTime)
 	}
 	LastMouseX = MouseX;
 	LastMouseY = MouseY;
+	// A free cursor moves over the HUD's widgets (hover, clicks), in the frame's pixels.
+	if (!Window->IsCursorCaptured())
+	{
+		ULocalPlayer* Player = FindLocalPlayerFromControllerId(0);
+		AHUD* HUD =
+			Player != nullptr && Player->PlayerController != nullptr ? Player->PlayerController->MyHUD : nullptr;
+		if (HUD != nullptr)
+		{
+			const IRendererModule* Renderer = GetRendererModulePtr();
+			const FIntPoint WindowSize = Viewport ? Viewport->GetWindowSize() : FIntPoint(0, 0);
+			HUD->InputMouseMove(Renderer != nullptr ? Renderer->WindowToRenderTarget(Cursor, WindowSize) : Cursor);
+		}
+	}
 
 	ProcessGamepadInput(AllKeys, DeltaTime);
 }

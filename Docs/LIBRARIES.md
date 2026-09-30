@@ -22,7 +22,7 @@ There are two ways to obtain the code:
 | `GLFW` | [GLFW](https://www.glfw.org/) 3.4 | downloaded (`glfw-3.4`) | zlib | `ApplicationCore` (Desktop only) | Desktop |
 | `MeshOptimizer` | [meshoptimizer](https://github.com/zeux/meshoptimizer) 1.2 | downloaded (`meshoptimizer-1.2`) | MIT | `MeshUtilities` (the LPS2 v2 build: vertex welding, vertex cache order for strips, stripification; simplification for the LODs of [ps2-shipping](PLANS/ps2-shipping.md) N15). Edit time only: no game target links it | Desktop |
 | `MiniAudio` | [miniaudio](https://miniaud.io/) 0.11.25 | downloaded (`miniaudio-0.11.25`) | public domain (Unlicense) or MIT-0 | `AudioMixer` | Desktop |
-| `STB` | [stb](https://github.com/nothings/stb) `stb_image.h` 2.30, `stb_easy_font.h` 1.1, header-only | vendored (`STB/stb/`) | public domain or MIT | `Engine` (`stb_easy_font`: the canvas font), `LeonEd` (`stb_image`: the texture factory, the only image decoder) | all (Win64 and PS2) |
+| `STB` | [stb](https://github.com/nothings/stb) `stb_image.h` 2.30, `stb_truetype.h` 1.26, header-only | vendored (`STB/stb/`) | public domain or MIT | `LeonEd` (`stb_image`: the texture factory, the only image decoder; `stb_truetype`: the TrueType font factory, the only font reader, [ps2-polish](PLANS/ps2-polish.md) P5). Edit time only: no game target links it | Desktop |
 
 `Setup.bat` downloads the three downloaded modules (GLFW, meshoptimizer, miniaudio); nothing else is fetched.
 
@@ -32,8 +32,8 @@ None: the engine ships no plugin.
 
 ## PS2
 
-The only third-party module on PS2 is STB (header-only, for `stb_easy_font`); the others are restricted to `Desktop`
-(Win64). PS2 code uses the PS2SDK system libraries from the pinned ps2dev Docker image, linked with
+No third-party module builds for the PS2 since [ps2-polish](PLANS/ps2-polish.md) P5 (STB's `stb_easy_font` was the
+last: the canvas draws text in the engine's `UFont`s); they are all restricted to `Desktop` (Win64). PS2 code uses the PS2SDK system libraries from the pinned ps2dev Docker image, linked with
 `PUBLIC_SYSTEM_LIBRARIES` by the modules' PS2 extensions (`Engine/Platforms/PS2/Source/Runtime/<Module>/`):
 
 | Libraries | Linked by |
@@ -47,7 +47,20 @@ The only third-party module on PS2 is STB (header-only, for `stb_easy_font`); th
 Math on PS2 uses Core's math (`FVector`, `FMatrix`, `FMath`, …) and `FPlatformMath` (`FPS2PlatformMath::Sin256` /
 `Cos256`).
 
+## Fonts and art
+
+Third-party data that ships in the content, not code: DejaVu Sans Condensed 2.37
+([dejavu-fonts](https://dejavu-fonts.github.io/), `Engine/SourceArt/EngineFonts/DejaVuSansCondensed.ttf`), the engine's
+font, imported at 10, 14, 20 and 32 pixels ([ASSET_FORMATS.md](ASSET_FORMATS.md#fonts)). License: the Bitstream Vera
+fonts license (a permissive license: use, copy, modify and redistribute, the fonts not sold by themselves, the name
+not reused for modified fonts), the DejaVu changes in the public domain; the full text is in
+`Engine/SourceArt/EngineFonts/LICENSE.txt`, and [Engine/SourceArt/LICENSES.md](../Engine/SourceArt/LICENSES.md) lists
+the engine's third-party source art.
+
 ## Removed libraries
+
+`stb_easy_font` (1.1, the HUD's bitmap font of rectangle bars) was removed in [ps2-polish](PLANS/ps2-polish.md) P5:
+the canvas and UMG draw text in `UFont`s. `CheckBannedApis.ps1` (G4) rejects its name.
 
 GLM (1.0.1), nlohmann/json (3.11.3) and Catch2 (3.5.4) were removed in P6: every module uses Core math, JSON goes
 through the native `Json` module (UE's `FJsonObject` / `FJsonSerializer`), and every test is a UE automation test.

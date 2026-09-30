@@ -95,7 +95,8 @@ public:
 
 	/**
 	 * Records the canvas into List, blended, without the depth test: its rectangles (tiles, glyphs, lines along an
-	 * axis) as SPRITEs of two vertices, its other lines as triangles (FCanvas::GetPrimitives, N15).
+	 * axis) as SPRITEs of two vertices, its rotated tiles and slanted lines as triangles (FCanvas::GetPrimitives, N15);
+	 * the textured ones sample their texture by UV through the texture cache (the font's pages, UImage's brushes).
 	 */
 	void DrawCanvas(const FCanvas& Canvas, const FGSDrawEnvironment& Environment, FGSCommandList& List);
 
@@ -213,6 +214,8 @@ private:
 		FGSPrimitiveEmitter& Emitter, FGSCommandList& List, const FGSDrawEnvironment& Environment);
 	/** Binds the effects' mask (the spot in the alpha); false without a texture arena. */
 	bool BindEffectsMask(FGSCommandList& List);
+	/** Binds a canvas run's texture (TEX0 when it changes); false when it is not resident this frame. */
+	bool BindCanvasTexture(const UTexture2D& Texture, FGSCommandList& List);
 	/** Blended triangles of the effects' vertices, not culled. */
 	void DrawEffectVertices(FGSPrimitiveEmitter& Emitter, TArrayView<const FWorldEffectVertex> Vertices,
 		const FMatrix& ViewProjection, bool bTextured);

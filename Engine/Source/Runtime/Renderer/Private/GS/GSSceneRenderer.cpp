@@ -1060,6 +1060,25 @@ void FGSSceneRenderer::DrawWorldLines(const FSceneViewFamily& ViewFamily, const 
 	World->LineBatcher.Clear();
 }
 
+bool FGSSceneRenderer::BindCanvasTexture(const UTexture2D& Texture, FGSCommandList& List)
+{
+	if (TextureState.Texture != &Texture)
+	{
+		FGSTextureBinding Binding;
+		// Not resident this frame (the upload budget, a full arena): the run waits for a later frame rather than
+		// drawing its texels' average over its rectangles.
+		if (!TextureCache.BindTexture(Texture, List, Binding) || Binding.bFlat)
+		{
+			return false;
+		}
+		List.SetTex0(0, Binding.Tex0);
+		++FrameStats.Tex0Writes;
+		TextureState.Texture = &Texture;
+		TextureState.Binding = Binding;
+	}
+	return true;
+}
+
 void FGSSceneRenderer::DrawCanvas(const FCanvas& Canvas, const FGSDrawEnvironment& Environment, FGSCommandList& List)
 {
 	SCOPE_CYCLE_COUNTER(STAT_GSDrawCanvas);
@@ -1068,27 +1087,49 @@ void FGSSceneRenderer::DrawCanvas(const FCanvas& Canvas, const FGSDrawEnvironmen
 	{
 		return;
 	}
-	// Kept between frames: the canvas's vertices (the HUD's text is thousands) reuse their capacity.
+	// Kept between frames: the canvas's vertices reuse their capacity.
 	TArray<FCanvasVertex>& Vertices = CanvasVertices;
 	Canvas.GetPrimitives(Vertices, CanvasRuns);
 	// Pixel coordinates (top-left origin) blended by their alpha over the frame, without the depth test or Z writes:
-	// the rectangles as SPRITEs (two vertices, the colour flat), the rest as Gouraud triangles (N15).
+	// the rectangles as SPRITEs (two vertices, the colour flat), the rest as Gouraud triangles (N15). A textured run
+	// samples its texture by UV (texels; the texture's rows are stored bottom first, so V turns), MODULATE by the
+	// vertex colour, clamped, nearest when its texels map to pixels one to one (glyphs), bilinear otherwise.
 	List.SetTest(0, FGSDrawEnvironment::DepthTest(false));
 	SetDepthWrite(List, Environment, false);
 	FGSRGBAQ Last;
 	bool bHasLast = false;
-	// A run of vertices shares its colour (a label, a panel): it converts once per run, not per vertex.
-	float LastR = -1.0f;
-	float LastG = -1.0f;
-	float LastB = -1.0f;
-	float LastA = -1.0f;
+	FGSClamp Clamp;
+	Clamp.WMS = EGSWrapMode::Clamp;
+	Clamp.WMT = EGSWrapMode::Clamp;
+	FGSTex1 Nearest;
+	Nearest.bFixedLOD = true;
 	for (const FCanvasPrimitiveRun& Run : CanvasRuns)
 	{
+		const bool bTextured = Run.Texture != nullptr;
+		if (bTextured)
+		{
+			if (!BindCanvasTexture(*Run.Texture, List))
+			{
+				continue;
+			}
+			SetSampler(List, Run.bNearest ? Nearest : BilinearSampling(), Clamp);
+		}
 		FGSPrim Prim;
 		Prim.Type = Run.Type == ECanvasPrimitive::Rectangle ? EGSPrimitive::Sprite : EGSPrimitive::Triangle;
 		Prim.bGouraud = Run.Type == ECanvasPrimitive::Triangle;
 		Prim.bAlphaBlend = true;
+		Prim.bTextured = bTextured;
+		Prim.bUseUV = bTextured;
 		List.SetPrim(Prim);
+		// MODULATE takes 0x80 as 1.0; a flat colour is written as it is.
+		const float ColorScale = bTextured ? 128.0f : 255.0f;
+		const float TexelsU = bTextured ? float(Run.Texture->GetSizeX()) : 0.0f;
+		const float TexelsV = bTextured ? float(Run.Texture->GetSizeY()) : 0.0f;
+		// A run of vertices shares its colour (a label, a panel): it converts once per run, not per vertex.
+		float LastR = -1.0f;
+		float LastG = -1.0f;
+		float LastB = -1.0f;
+		float LastA = -1.0f;
 		for (int32 Index = Run.FirstVertex; Index < Run.FirstVertex + Run.NumVertices; ++Index)
 		{
 			const FCanvasVertex& Vertex = Vertices[Index];
@@ -1099,9 +1140,9 @@ void FGSSceneRenderer::DrawCanvas(const FCanvas& Canvas, const FGSDrawEnvironmen
 				LastB = Vertex.B;
 				LastA = Vertex.A;
 				FGSRGBAQ Color;
-				Color.R = UnitByte(Vertex.R);
-				Color.G = UnitByte(Vertex.G);
-				Color.B = UnitByte(Vertex.B);
+				Color.R = uint8(FMath::Clamp(FMath::RoundToInt(Vertex.R * ColorScale), 0, 255));
+				Color.G = uint8(FMath::Clamp(FMath::RoundToInt(Vertex.G * ColorScale), 0, 255));
+				Color.B = uint8(FMath::Clamp(FMath::RoundToInt(Vertex.B * ColorScale), 0, 255));
 				Color.A = uint8(FMath::Clamp(FMath::RoundToInt(Vertex.A * 128.0f), 0, 0x80));
 				if (!bHasLast || Color.Encode() != Last.Encode())
 				{
@@ -1109,6 +1150,13 @@ void FGSSceneRenderer::DrawCanvas(const FCanvas& Canvas, const FGSDrawEnvironmen
 					Last = Color;
 					bHasLast = true;
 				}
+			}
+			if (bTextured)
+			{
+				FGSUV UV;
+				UV.U = uint16(FMath::Clamp(FMath::RoundToInt(Vertex.U * TexelsU * 16.0f), 0, 0x3fff));
+				UV.V = uint16(FMath::Clamp(FMath::RoundToInt((1.0f - Vertex.V) * TexelsV * 16.0f), 0, 0x3fff));
+				List.SetUV(UV);
 			}
 			// OpenGL covers pixel i when i + 0.5 is inside; the GS samples pixel i at i.
 			List.AddVertex(Environment.PixelVertex(Vertex.X - 0.5f, Vertex.Y - 0.5f, 0));

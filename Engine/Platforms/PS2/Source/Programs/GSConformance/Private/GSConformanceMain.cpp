@@ -13,14 +13,17 @@ namespace
 
 	constexpr int32 ScreenWidth = 640;
 	constexpr int32 ScreenHeight = 448;
-	/** Each scene's pixel as Scale x Scale screen pixels, in a grid of Columns (4 x 5 cells on the screen). */
+	/**
+	 * Each scene's pixel as Scale x Scale screen pixels, in a grid of Columns (4 x 6 cells on the screen: the labels'
+	 * 7-pixel text over each cell, the rows touching, so 24 scenes fit the 448 lines).
+	 */
 	constexpr int32 Scale = 2;
 	constexpr int32 Columns = 4;
 	constexpr float CellWidth = float(GSConformance::FrameWidth * Scale);
 	constexpr float CellHeight = float(GSConformance::FrameHeight * Scale);
 	constexpr float Gap = 16.0f;
-	constexpr float LabelHeight = 10.0f;
-	constexpr float RowPitch = LabelHeight + CellHeight + 10.0f;
+	constexpr float LabelHeight = 8.0f;
+	constexpr float RowPitch = LabelHeight + CellHeight;
 
 	/**
 	 * Shows the scene's frame buffer (FBP 0) at (Left, Top), pixels from the screen's top left: a sprite that samples
@@ -77,7 +80,7 @@ int main(int ArgC, char* ArgV[])
 	UE_LOG(LogGSConformance, Display, TEXT("GSConformance: drawing %d scenes"), Scenes.Num());
 
 	const float GridLeft = (float(ScreenWidth) - ((CellWidth * Columns) + (Gap * (Columns - 1)))) * 0.5f;
-	const float GridTop = 12.0f;
+	const float GridTop = 6.0f;
 	const FGSRGBAQ LabelColor = FGSDebugDraw::UnitColor(0.9f, 0.9f, 0.8f);
 	for (;;)
 	{

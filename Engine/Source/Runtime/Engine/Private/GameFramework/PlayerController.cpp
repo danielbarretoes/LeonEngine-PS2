@@ -110,6 +110,11 @@ void APlayerController::ClientSetHUD(TSubclassOf<AHUD> NewHUDClass)
 
 bool APlayerController::InputKey(FKey Key, EInputEvent EventType, float AmountDepressed, bool bGamepad)
 {
+	// The HUD's focused widgets see the keys first (UE: Slate before the player's input).
+	if (MyHUD != nullptr && MyHUD->InputKey(Key, EventType))
+	{
+		return true;
+	}
 	return PlayerInput != nullptr && PlayerInput->InputKey(Key, EventType, AmountDepressed, bGamepad);
 }
 

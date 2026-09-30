@@ -123,6 +123,20 @@ public:
 	}
 
 	/**
+	 * A point of a WindowSize window in the frame's pixels (GetRenderTargetSize), where the frame is shown in it (Leon:
+	 * the mouse over the HUD's widgets; the desktop's GS frame sits scaled and centred in the window).
+	 */
+	[[nodiscard]] virtual FVector2D WindowToRenderTarget(
+		const FVector2D& WindowPosition, const FIntPoint& WindowSize) const
+	{
+		const FIntPoint Target = GetRenderTargetSize(WindowSize);
+		return WindowSize.X > 0 && WindowSize.Y > 0
+			? FVector2D(WindowPosition.X * float(Target.X) / float(WindowSize.X),
+				  WindowPosition.Y * float(Target.Y) / float(WindowSize.Y))
+			: WindowPosition;
+	}
+
+	/**
 	 * The frame is complete (UE: RHIEndDrawingViewport): the desktop shows its GS frame in the WindowSize window at the
 	 * display's aspect ratio, and holds it for the settings' SyncInterval (the PS2's frame rate); the PS2 sends it when
 	 * the window swaps.

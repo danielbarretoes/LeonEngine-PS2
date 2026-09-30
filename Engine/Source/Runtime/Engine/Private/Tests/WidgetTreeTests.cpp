@@ -9,6 +9,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "CoreMinimal.h"
+#include "Engine/Engine.h"
 #include "Misc/AutomationTest.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -62,7 +63,7 @@ bool FWidgetTreeLayoutTest::RunTest(const FString& Parameters)
 	TestEqual("Children", Box->GetChildrenCount(), 3);
 	float TextWidth = 0.0f;
 	float TextHeight = 0.0f;
-	FCanvas::MeasureText(TEXT("Buy"), HudFontScale, TextWidth, TextHeight);
+	FCanvas::MeasureText(UEngine::GetSmallFont(), TEXT("Buy"), TextWidth, TextHeight);
 	const FVector2D BoxSize(FMath::Max(TextWidth, 20.0f), TextHeight + 5.0f + 30.0f);
 	TestTrue("The box's size (collapsed takes none)", Box->GetDesiredSize().Equals(BoxSize));
 	TestTrue("The border's", Border->GetDesiredSize().Equals(BoxSize + FVector2D(20.0f, 20.0f)));
@@ -74,8 +75,11 @@ bool FWidgetTreeLayoutTest::RunTest(const FString& Parameters)
 	TArray<FCanvasVertex> Vertices;
 	TArray<FCanvasPrimitiveRun> Runs;
 	Canvas.GetPrimitives(Vertices, Runs);
+	// The two tiles, then the text's glyphs: a run of rectangles textured by the font's page.
 	if (!TestTrue("Two tiles and the text, all rectangles",
-			Vertices.Num() > 4 && Runs.Num() == 1 && Runs[0].Type == ECanvasPrimitive::Rectangle))
+			Vertices.Num() > 4 && Runs.Num() == 2 && Runs[0].Type == ECanvasPrimitive::Rectangle &&
+				Runs[0].Texture == nullptr && Runs[0].NumVertices == 4 && Runs[1].Type == ECanvasPrimitive::Rectangle &&
+				Runs[1].Texture != nullptr && Runs[1].NumVertices == 6))
 	{
 		return false;
 	}

@@ -4,6 +4,8 @@
 #include "CoreMinimal.h"
 #include "Engine/BlockingVolume.h"
 #include "Engine/DamageEvents.h"
+#include "Engine/Engine.h"
+#include "Engine/Font.h"
 #include "Engine/Level.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/SkeletalMesh.h"
@@ -963,8 +965,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameHUDRoundInfoTest, "ShooterGame.HUD.
 
 bool FShooterGameHUDRoundInfoTest::RunTest(const FString& Parameters)
 {
-	// In a match the HUD draws more than the crosshair (the clock, the score, the round), and the crosshair opens with
-	// the spread.
+	// In a match the HUD draws more than the crosshair (the clock, the score, the round: a textured sprite a glyph of
+	// the engine's small font), and the crosshair opens with the spread.
 	FScopedTestWorld TestWorld;
 	UWorld& World = *TestWorld;
 	(void)SetUpMatch(World, 1, 1);
@@ -976,6 +978,19 @@ bool FShooterGameHUDRoundInfoTest::RunTest(const FString& Parameters)
 	TArray<FCanvasPrimitiveRun> Runs;
 	Canvas.GetPrimitives(Vertices, Runs);
 	TestTrue("The round's text too", Vertices.Num() > 4 * 2);
+	const UFont* Font = UEngine::GetSmallFont();
+	int32 Glyphs = 0;
+	bool bSmallFont = Font != nullptr;
+	for (const FCanvasPrimitiveRun& Run : Runs)
+	{
+		if (Run.Texture != nullptr)
+		{
+			Glyphs += Run.NumVertices / 2;
+			bSmallFont &= Run.Type == ECanvasPrimitive::Rectangle && Font->Textures.Contains(Run.Texture);
+		}
+	}
+	// "CT 0", "0:.." and "0 T" and "Round 1": more than a dozen glyphs, each one sprite of the font's page.
+	TestTrue("A sprite a glyph, in the small font", Glyphs > 12 && bSmallFont);
 	TestEqual("No pawn: the base gap", HUD->GetCrosshairGap(720.0f), HUD->CrosshairGap);
 	return true;
 }

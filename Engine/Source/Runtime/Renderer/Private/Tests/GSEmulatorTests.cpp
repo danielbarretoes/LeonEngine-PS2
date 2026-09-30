@@ -23,6 +23,7 @@
 #include "Misc/Paths.h"
 #include "Primitives.h"
 #include "SceneView.h"
+#include "Tests/CanvasTestScene.h"
 #include "Tests/ScopedTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -278,6 +279,52 @@ bool FGSEmulatorSceneFrameTest::RunTest(const FString& Parameters)
 	const int32 NumDifferent = CountDifferentPixels(
 		TEXT("Scene frame"), Emulated, Expected, FGSOpenGLEmulator::FrameWidth, SceneChannelTolerance);
 	TestTrue("The scene frame within the tolerance", NumDifferent <= SceneMaxDifferentPixels);
+	Emulator.Shutdown();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSEmulatorCanvasFrameTest, "System.Renderer.GSEmulator.CanvasFrame",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::NonNullRHI | EAutomationTestFlags::SmokeFilter)
+
+bool FGSEmulatorCanvasFrameTest::RunTest(const FString& Parameters)
+{
+	// The canvas's text (the four fonts, Spanish, a shadow, an outline) and textured tiles (one to one, scaled,
+	// rotated) in the desktop's environment: the emulator draws what the reference draws from the same list.
+	FScopedGLContext Context;
+	if (!Context.IsValid())
+	{
+		AddError("No OpenGL context (a display is needed; run LeonAutomationTests with -nodisplay to skip this test)");
+		return false;
+	}
+	FGSOpenGLEmulator Emulator;
+	if (!TestTrue("The emulator starts", Emulator.Initialize(FPaths::Combine(FPaths::EngineDir(), TEXT("Shaders")))))
+	{
+		return false;
+	}
+	UTexture2D* Texture = CanvasTestScene::MakeTexture();
+	FCanvas Canvas(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	CanvasTestScene::Draw(Canvas, Texture);
+	const FGSDrawEnvironment Environment = FGSOpenGLEmulator::GetDrawEnvironment();
+	uint32 ArenaFirstBlock = 0;
+	uint32 ArenaBlocks = 0;
+	FGSOpenGLEmulator::GetTextureArena(ArenaFirstBlock, ArenaBlocks);
+	FGSSceneRenderer Renderer;
+	Renderer.GetTextureCache().SetArena(ArenaFirstBlock, ArenaBlocks);
+	Renderer.GetTextureCache().SetTextureConverter(&ConvertTextureAsPS2Cook);
+	Renderer.GetTextureCache().BeginFrame();
+	FGSCommandList List;
+	Environment.Append(List);
+	Renderer.DrawCanvas(Canvas, Environment, List);
+
+	Emulator.Execute(List);
+	const TArray<FColor> Emulated = Emulator.ReadFrame(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	FGSReferenceRasterizer Reference;
+	Reference.Execute(List);
+	const TArray<FColor> Expected =
+		Reference.ReadFrame(Environment.Frame, FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	const int32 NumDifferent = CountDifferentPixels(
+		TEXT("Canvas frame"), Emulated, Expected, FGSOpenGLEmulator::FrameWidth, SceneChannelTolerance);
+	TestTrue("The canvas frame within the tolerance", NumDifferent <= SceneMaxDifferentPixels);
 	Emulator.Shutdown();
 	return true;
 }

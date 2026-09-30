@@ -40,6 +40,7 @@ load that package first. The tests save every class to memory and load it back
 | --- | --- | --- |
 | `UTexture` (`Engine/Texture.h`), abstract | `SRGB` (recorded; the forward renderer uploads the texels as they are) | — |
 | `UTexture2D` (`Engine/Texture2D.h`) | — | `FTexturePlatformData`: `int32` SizeX, SizeY, `uint8` `EPixelFormat` (UE values: `PF_R8G8B8A8` = 37, `PF_B8G8R8A8` = 2; Leon's paletted formats of the PS2 cook: `PF_P8` = 200, 256 RGBA8 palette entries then an index a texel, and `PF_P4` = 201, 16 entries then two texels a byte, the first in the low nibble), `int32` mip count, then per mip `int32` SizeX, SizeY and its data as bulk data, bottom row first: mip 0 `GetPixelFormatDataSize` bytes, a later mip `GetPixelFormatMipDataSize` (a paletted mip is its indices only, through mip 0's palette). An imported texture has mip 0 only; the PS2 cook's paletted ones carry their mip chain ([PS2](#ps2)) |
+| `UFont` (`Engine/Font.h`) | `Textures` (the glyph pages: `UTexture2D` subobjects `Texture0` ..., PF_P4), `Ascent`, `Descent`, `Leading` (pixels), `Kerning` (0), `LegacyFontSize` (the pixel height), `LegacyFontName` (the TrueType family), `AssetImportData` | the characters (`int32` count, then each `FFontCharacter`: `int32` StartU, StartV, USize, VSize, `uint8` TextureIndex, `int32` VerticalOffset, HorizontalOffset, Advance; indexed by code point), then the kerning pairs (`int32` count, then each `uint32` pair, first code point in the high 16 bits, and `int32` pixels): [fonts](#fonts) |
 | `UStaticMesh` (`Engine/StaticMesh.h`) | `StaticMaterials` (`FStaticMaterial`: `MaterialInterface`, `MaterialSlotName`), `BodySetup` (an inner object), `SourceModels` ([LODs](#static-mesh-lods): `FStaticMeshSourceModel`, `ReductionSettings.PercentTriangles` and `ScreenSize`; empty for one LOD) | the local bounding box (`FBox`, of the source's positions), then one bulk payload: LOD 0's render data (`FStaticMeshLODResources`), an [LPS2 v2](#lps2-v2) blob as its `int32` size and its bytes, then the collision triangles (`FTriMeshCollisionData`: the source's positions as an array of `FVector`, its `uint32` indices, three a triangle, and each triangle's material slot as an array of `uint16`, `MaterialIndices`, [ps2-shipping](PLANS/ps2-shipping.md) N30f), then each later LOD's blob (as many as `SourceModels` has entries after the first) |
 | `UBodySetup` (`PhysicsEngine/BodySetup.h`) | `AggGeom` (`FKAggregateGeom`: `BoxElems`, each `FKBoxElem` Center, Rotation, X, Y, Z in cm), `CollisionTraceFlag` (`ECollisionTraceFlag`) | — |
 | `UMaterialInterface` (`Materials/MaterialInterface.h`), abstract; `UMaterial` (`Materials/Material.h`) | `ShadingModel` (`MSM_Unlit`, `MSM_DefaultLit`), `BaseColor` (`FLinearColor`, linear RGB), `Opacity`, `UVScale` (`FVector2D`), `BaseColorMap` (`UTexture2D*`), `bMipmaps` (true: the map's mips, trilinear), `LodBias` (levels added to its LOD): what the GS scene renderer draws with (`FMaterial`); `PhysMaterial` (`UPhysicalMaterial*`, [physical materials](#physical-materials)) | — |
@@ -93,6 +94,7 @@ The engine's assets are `/Engine` packages in `Engine/Content`, migrated from th
 | `/Engine/EngineMaterials/T_Default_D` | `UTexture2D` (128 × 128, sRGB) | imported: `Engine/SourceArt/EngineMaterials/T_Default_D.png` (`Engine/SourceArt/ImportList.ini`) |
 | `/Engine/EngineMaterials/M_Default`, `M_WorldGrid` | `UMaterial` | converted once from `Materials/*.lmat` (their colour, UV scale and map, `T_Default_D`); the packages are the source of truth |
 | `/Engine/EngineResources/DefaultTexture` | `UTexture2D` (64 × 64 grey checker, sRGB) | saved once from the procedural generator (UE: DefaultTexture) |
+| `/Engine/EngineFonts/DejaVuSansCondensed10`, `14`, `20`, `32` | `UFont` (one PF_P4 page each: 256 × 64, 128 × 128, 256 × 128, 256 × 256) | imported: `Engine/SourceArt/EngineFonts/DejaVuSansCondensed.ttf` at 10, 14, 20 and 32 pixels (`Engine/SourceArt/ImportList.ini`, [fonts](#fonts)) |
 | `/Engine/BasicShapes/Cube`, `Plane`, `Sphere` | `UStaticMesh` (100 cm; the sphere 24 × 16; no material slots) | saved once from `MakeCube` / `MakePlane` / `MakeSphere` (RenderCore) |
 | `/Engine/Maps/Entry`, `/Engine/Maps/Template_Default` | map (`.lmap`) | migrated once (P15) from the legacy `Blank.llev` and `Starter.llev` templates ([LEVELS.md](LEVELS.md#engine-maps)); the packages are the source of truth |
 | `/Engine/Maps/AxisTest` (with its `Meshes/SM_*` and `Materials/M_*`) | map (`.lmap`) | imported: `Engine/SourceArt/Maps/AxisTest.glb`, written by `MakeAxisTest.py` (`Engine/SourceArt/ImportList.ini`) |
@@ -105,6 +107,10 @@ loads the default material (what a mesh slot without a material draws with) and 
 [/Script/Engine.Engine]
 DefaultMaterialName=/Engine/EngineMaterials/M_Default.M_Default
 DefaultTextureName=/Engine/EngineResources/DefaultTexture.DefaultTexture
+TinyFontName=/Engine/EngineFonts/DejaVuSansCondensed10.DejaVuSansCondensed10
+SmallFontName=/Engine/EngineFonts/DejaVuSansCondensed14.DejaVuSansCondensed14
+MediumFontName=/Engine/EngineFonts/DejaVuSansCondensed20.DejaVuSansCondensed20
+LargeFontName=/Engine/EngineFonts/DejaVuSansCondensed32.DejaVuSansCondensed32
 UIClickSoundName=
 UIConfirmSoundName=
 UIBackSoundName=
@@ -359,6 +365,7 @@ UE's prefix for its class:
 | `UTextureFactory` | PNG, JPEG, TGA, BMP (stb_image) | `UTexture2D` (`T_`): RGBA8, bottom row first; sRGB unless `ColorSpaceMode=Linear` or a `_N` / `_Normal` name |
 | `UGLTFImportFactory` | glTF / GLB (cgltf) | `UStaticMesh` (`SM_`); with `ImportType=SkeletalMesh` (`-type=SkeletalMesh`) a `USkeletalMesh` (`SK_`) on `Skeleton` or a `SKEL_` skeleton next to it; with `ImportType=Animation` (`-type=Animation`) a `UAnimSequence` (`A_<Animation>`) per glTF animation on `Skeleton` ([below](#skeletal-meshes-and-animations--gltf-import)) |
 | `UGLTFMapFactory` (`-type=Map`) | glTF / GLB scene (cgltf) | a map (`UWorld`, `.lmap`, no prefix) with its `SM_` meshes and `M_` materials: [LEVELS.md](LEVELS.md#importing-a-map-from-gltf) |
+| `UTrueTypeFontFactory` (`-type=Font`) | `.ttf` (stb_truetype) | `UFont` (no prefix, as UE's engine fonts): the glyph pages and metrics at `Height` pixels ([fonts](#fonts)) |
 | `USoundFactory` | `.wav`, 16-bit PCM | `USoundWave` (`S_`): the samples as they are, with `CompressionSampleRate`, `bLooping`, `LoopStartFrame` and `Priority` (import settings) |
 | `UMaterialFactoryNew` | — (new) | `UMaterial` (`M_`) |
 | `UPhysicalMaterialFactoryNew` | — (new: an ImportList `Type=PhysicalMaterial` section, `SurfaceType=`) | `UPhysicalMaterial` (`PM_`) |
@@ -394,6 +401,38 @@ release or a version bump changes the hash: 0.21.0 with package version 6 (N30f)
 `F60454FC5600B82629A388B84599293F87E90A8FA9E4A58E34584F39ED8E29FF` and version 4 (N21)
 `50EEB3471A5CB963FCDFB4EED52744E42D087A78DB8BFEC3BAFCCBE4D3C3F087`; the same cube as `Cube.obj`, before N21,
 `93D5FB16E75F4FAD3436377D5A669CBD24B2FC9F6CB93A51B28E5018853D3C8E` (these three 2 344 bytes).
+
+---
+
+## Fonts
+
+A `UFont` is UE's offline font ([ps2-polish](PLANS/ps2-polish.md) P5): its glyphs rasterized once, at import, into
+texture pages the canvas samples; Leon has no runtime font cache, no composite fonts and no hinting.
+
+- **Import.** `UTrueTypeFontFactory` (LeonEd, `-type=Font`, `.ttf`) reads the file with stb_truetype (the only
+  TrueType reader, edit time only). Its settings, keys of an ImportList section like any factory's: `Height` (the
+  pixels of the ascent plus the descent; 14 by default), `UnicodeRange` (hexadecimal ranges, `0020-007E,00A0-00FF`:
+  ASCII's printable characters and Latin-1's, what Spanish needs; code points past 255 are not kept),
+  `TexturePageWidth` / `TexturePageMaxHeight` (256, the GS's budget) and `XPadding` / `YPadding` (1 empty texel around
+  each glyph, so a scaled glyph does not sample its neighbour).
+- **Metrics.** The scale makes the font's ascent plus descent `Height` pixels; `Ascent`, `Descent` and `Leading` are
+  rounded to whole pixels, and so is each glyph's advance, its left bearing (`HorizontalOffset`, the bitmap box's
+  left edge) and its top (`VerticalOffset`, from the line's top). The kerning pairs are the font's (its `kern` table or
+  GPOS pair adjustments) between every two kept characters, rounded, the zeros dropped, sorted by pair.
+- **Pages.** Each glyph's coverage is quantized to 16 levels (`(c × 15 + 127) / 255`). The glyphs, tallest first
+  (then widest, then by code point), go on shelves in the smallest power-of-two page, square or wider, that holds all
+  of the rest; when none does, a full page takes what fits and the next page the rest. A page is a `UTexture2D` subobject
+  (`Texture<N>`, not sRGB) in PF_P4: the CLUT image (white, the alpha the coverage level × 17, scaled to the GS's 0 to
+  0x80 by `FGSTextureLayout::MakeClutImage`), then the indices bottom row first, as every texture's; the texture cache
+  uploads it as it is (PSMT4, no conversion, not budgeted by the cook: it is already paletted). `StartU` / `StartV`
+  count from the page's top-left corner.
+- **Determinism.** The same file and settings give the same bytes (the float rasterizer on one machine, a fixed order
+  everywhere, pages reused by name on a reimport): gate G5 reimports the engine's fonts with the rest of the content.
+
+The engine's fonts are DejaVu Sans Condensed (`Engine/SourceArt/EngineFonts/`, the Bitstream Vera license with the
+DejaVu changes in the public domain: `LICENSE.txt` there, [Engine/SourceArt/LICENSES.md](../Engine/SourceArt/LICENSES.md))
+at 10, 14, 20 and 32 pixels: one page each (256 × 64, 128 × 128, 256 × 128 and 256 × 256: 8, 8, 16 and 32 KB of GS
+memory when drawn), with 293, 430, 555 and 678 kerning pairs.
 
 ---
 

@@ -24,6 +24,7 @@ Engine/Source/Programs/LeonHeaderTool/Tests/** text eol=lf
 *.glb binary
 *.blend binary
 *.wav binary
+*.ttf binary
 *.lpak binary
 *.png binary
 *.pdf binary

@@ -1,5 +1,7 @@
-# stb (stb_image, stb_easy_font) — vendored header-only image/font helpers, portable C on every platform.
+# stb (stb_image, stb_truetype): vendored header-only image and TrueType readers, LeonEd's importers (edit time, the
+# desktop only: no game links them).
 leon_module(STB
+	PLATFORMS Desktop
 	EXTERNAL_TARGETS LeonThirdParty_STB
 )
 

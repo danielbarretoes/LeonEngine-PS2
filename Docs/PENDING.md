@@ -30,10 +30,11 @@ PCSX2 (p50/p95/p99 33.5 ms), so nothing here blocks the frame rate.
 - **Team selection.** On joining a match the player chooses CT or T, as in CS. The bots are then redistributed so the
   teams are as even as possible, counting the player.
 - **In-game menu.** A pause menu during the match (Esc / Start) to resume, change team, or go back to the main menu.
-- **UI.** Better menus and HUD, and a new font family.
-- **A table widget for the HUD.** A reusable UMG-style table component (columns with headers, alignment and widths,
-  rows, sorting, a highlighted row) for the scoreboard. Today `AShooterHUD` draws the scoreboard by hand. The CS
-  scoreboard shows per team: name, score (kills), deaths, latency or bot, alive/dead, and the bomb carrier for T.
+- **UI.** Better menus and HUD. The font family (DejaVu Sans Condensed, `UFont`), the textured canvas and UMG's
+  buttons, focus, switcher and table exist since [ps2-polish](PLANS/ps2-polish.md) P5; the HUD only changed its font.
+- **The scoreboard in a table.** `AShooterHUD` still draws the scoreboard by hand, aligned with spaces (which the
+  proportional font no longer lines up); UMG's `UTableView` (P5) is for it. The CS scoreboard shows per team: name,
+  score (kills), deaths, latency or bot, alive/dead, and the bomb carrier for T.
 
 ShooterGame stays single player against bots: no split screen (decided 2026-09-30).
 

@@ -3,6 +3,7 @@
 #include "CoreGlobals.h"
 #include "Engine/CollisionProfile.h"
 #include "Engine/Engine.h"
+#include "Engine/Font.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/Texture2D.h"
@@ -145,12 +146,81 @@ void UEngine::InitializeObjectReferences()
 {
 	// UE: LoadEngineTexture. A missing package is a warning (LoadObject) and a null texture.
 	DefaultTexture = LoadObject<UTexture2D>(nullptr, *DefaultTextureName.ToString());
+	TinyFont = GetTinyFont();
+	SmallFont = GetSmallFont();
+	MediumFont = GetMediumFont();
+	LargeFont = GetLargeFont();
 	(void)UMaterial::GetDefaultMaterial(MD_Surface);
 	UISounds.Reset();
 	for (const FSoftObjectPath* Name : {&UIClickSoundName, &UIConfirmSoundName, &UIBackSoundName, &UIErrorSoundName})
 	{
 		UISounds.Add(Name->IsNull() ? nullptr : LoadObject<USoundWave>(nullptr, *Name->ToString()));
 	}
+}
+
+namespace
+{
+
+	/**
+	 * The engine font Path names, loaded once and kept (rooted) in Slot: GEngine's own (Init) or, without an engine,
+	 * the class default's config path. A missing package leaves it null (LoadObject warns once).
+	 */
+	UFont* LoadEngineFont(UFont*& Slot, bool& bTried, const FSoftObjectPath& Path)
+	{
+		if (Slot == nullptr && !bTried)
+		{
+			bTried = true;
+			if (!Path.IsNull())
+			{
+				Slot = LoadObject<UFont>(nullptr, *Path.ToString());
+				if (Slot != nullptr)
+				{
+					Slot->AddToRoot();
+				}
+			}
+		}
+		return Slot;
+	}
+
+	struct FEngineFonts
+	{
+		UFont* Fonts[4] = {};
+		bool bTried[4] = {};
+	};
+
+	FEngineFonts& GetEngineFonts()
+	{
+		static FEngineFonts Fonts;
+		return Fonts;
+	}
+
+	UFont* GetEngineFont(int32 Index, FSoftObjectPath UEngine::* Name)
+	{
+		FEngineFonts& Fonts = GetEngineFonts();
+		const UEngine* Engine = GEngine != nullptr ? GEngine : GetDefault<UEngine>();
+		return LoadEngineFont(Fonts.Fonts[Index], Fonts.bTried[Index], Engine->*Name);
+	}
+
+} // namespace
+
+UFont* UEngine::GetTinyFont()
+{
+	return GetEngineFont(0, &UEngine::TinyFontName);
+}
+
+UFont* UEngine::GetSmallFont()
+{
+	return GetEngineFont(1, &UEngine::SmallFontName);
+}
+
+UFont* UEngine::GetMediumFont()
+{
+	return GetEngineFont(2, &UEngine::MediumFontName);
+}
+
+UFont* UEngine::GetLargeFont()
+{
+	return GetEngineFont(3, &UEngine::LargeFontName);
 }
 
 void UEngine::Start()

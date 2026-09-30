@@ -2,7 +2,9 @@
 
 #include "Blueprint/UserWidget.h"
 #include "CoreMinimal.h"
+#include "Engine/EngineBaseTypes.h"
 #include "GameFramework/Actor.h"
+#include "InputCoreTypes.h"
 #include "HUD.generated.h"
 
 class APlayerController;
@@ -103,6 +105,16 @@ public:
 	/** The canvas of the frame being drawn, set during Paint only (UE: Canvas, a UCanvas there). */
 	FCanvas* Canvas = nullptr;
 
+	/**
+	 * A key for the widgets, before the game's input (Leon: Slate sees the keys first in UE): the visible widgets from
+	 * the top (the last added) until one takes it (UUserWidget::ProcessKeyDownEvent ...); the mouse's buttons go to the
+	 * widget under the mouse. True when a widget took it: the player's input does not see it.
+	 */
+	bool InputKey(const FKey& Key, EInputEvent EventType);
+
+	/** The mouse at a canvas position (the viewport sends it while the cursor is free): the widgets' hover. */
+	void InputMouseMove(const FVector2D& CanvasPosition);
+
 	[[nodiscard]] const TArray<UUserWidget*>& GetWidgets() const
 	{
 		return Widgets;
@@ -112,4 +124,7 @@ private:
 	/** The added widgets, in paint order. */
 	UPROPERTY(Transient)
 	TArray<UUserWidget*> Widgets;
+
+	/** Where the mouse was last, on the canvas. */
+	FVector2D MousePosition = FVector2D(-1.0f, -1.0f);
 };

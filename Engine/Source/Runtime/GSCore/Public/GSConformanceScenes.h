@@ -76,6 +76,13 @@ namespace GSConformance
 	GSCORE_API void BuildDither16Blend(FGSCommandList& List);
 	/** CLUT loads by CLD 0 to 5 with CBP0 / CBP1 (a stale CLUT kept on purpose), and two PSMT4 CLUTs by CSA. */
 	GSCORE_API void BuildClutLoads(FGSCommandList& List);
+	/**
+	 * The canvas's textured draws (Docs/PLANS/ps2-polish.md P5): a PSMT4 texture whose CLUT carries colour and an
+	 * alpha ramp, MODULATE by the vertex colour and alpha blended over the frame; UV sprites at the canvas's half-pixel
+	 * positions, nearest one to one (a glyph), turned upside down in V (the canvas's bottom-first rows), bilinear
+	 * scaled, and a rotated quad of two bilinear UV triangles with a translucent vertex alpha (the minimap).
+	 */
+	GSCORE_API void BuildTexturedCanvas(FGSCommandList& List);
 
 	/** Every scene, in the order above. */
 	[[nodiscard]] GSCORE_API TArrayView<const FGSConformanceScene> GetScenes();

@@ -14,6 +14,7 @@
 #include "Engine.generated.h"
 
 class IEngineLoop;
+class UFont;
 class UGameViewportClient;
 class ULocalPlayer;
 class UPendingNetGame;
@@ -89,6 +90,38 @@ public:
 	/** DefaultTextureName, loaded by Init (UE: DefaultTexture). */
 	UPROPERTY(Transient)
 	UTexture2D* DefaultTexture = nullptr;
+
+	/**
+	 * The engine's fonts (UE: TinyFontName, SmallFontName, MediumFontName, LargeFontName): Leon's are DejaVu Sans
+	 * Condensed at 10, 14, 20 and 32 pixels (/Engine/EngineFonts). The canvas draws text without a font in SmallFont.
+	 */
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath TinyFontName;
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath SmallFontName;
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath MediumFontName;
+	UPROPERTY(GlobalConfig)
+	FSoftObjectPath LargeFontName;
+
+	/** The fonts, loaded by Init (UE: TinyFont, SmallFont, MediumFont, LargeFont). */
+	UPROPERTY(Transient)
+	UFont* TinyFont = nullptr;
+	UPROPERTY(Transient)
+	UFont* SmallFont = nullptr;
+	UPROPERTY(Transient)
+	UFont* MediumFont = nullptr;
+	UPROPERTY(Transient)
+	UFont* LargeFont = nullptr;
+
+	/**
+	 * The engine's fonts (UE: GetTinyFont, ...). Without GEngine (tests, commandlets) the config's font is loaded once
+	 * and kept (rooted); null when its package is missing.
+	 */
+	[[nodiscard]] static UFont* GetTinyFont();
+	[[nodiscard]] static UFont* GetSmallFont();
+	[[nodiscard]] static UFont* GetMediumFont();
+	[[nodiscard]] static UFont* GetLargeFont();
 
 	/**
 	 * The sound wave of each UI cue FAudioDevice::PlayUiSound plays (Leon; UE's Slate styles name their sounds):

@@ -146,7 +146,7 @@ planta con E, como antes).
 
 ### Interfaz
 
-**P5 · Base de UI: fuentes, texturas en el canvas y widgets (L)**
+**P5 · Base de UI: fuentes, texturas en el canvas y widgets (L) — hecha**
 - `UFont` (UE): una fuente OFL (DejaVu Sans Condensed / Noto Sans) rasterizada en el cook con stb_truetype a un atlas
   PSMT4 con métricas y kerning (tamaños 10/14/20/32 px); texto por SPRITE texturizado. Sustituye a `stb_easy_font` en
   el HUD y en UMG (D10); `FGSDebugDraw` conserva su fuente de depuración.
@@ -156,6 +156,66 @@ planta con E, como antes).
   `UWidgetSwitcher` y una tabla reutilizable (`UShooterTable` o `UListView`-like en UMG: columnas con cabecera,
   ancho, alineación, orden, fila resaltada).
 - Tests: métricas y kerning, render de texto contra referencia, navegación por foco, tabla ordenada.
+
+Estado: hecha.
+- Fuente: DejaVu Sans Condensed 2.37 (licencia Bitstream Vera, los cambios de DejaVu en dominio público), vendorizada
+  en `Engine/SourceArt/EngineFonts/` con su `LICENSE.txt` y en `Engine/SourceArt/LICENSES.md` y `LIBRARIES.md`.
+  `UTrueTypeFontFactory` (LeonEd, `-type=Font`, stb_truetype 1.26 en el módulo STB) la importa a `UFont` (el offline
+  font de UE) en 10, 14, 20 y 32 px (`/Engine/EngineFonts/DejaVuSansCondensed*`, `ImportList.ini` del motor): ASCII y
+  Latin-1, cobertura en 16 niveles en el alfa de la CLUT de páginas PF_P4 de hasta 256 x 256 (una página por tamaño:
+  256 x 64, 128 x 128, 256 x 128 y 256 x 256), avances, apoyos y pares de kerning redondeados a píxel. Reimportar da
+  los mismos bytes (G5 y `System.LeonEd.Factories.TrueTypeFont.Import`). `UEngine::GetTinyFont` ... `GetLargeFont`
+  (config `TinyFontName` ...) las cargan; sin `GEngine` (tests, commandlets) se cargan al primer uso.
+- Canvas: `DrawText(Font, ...)` / `MeasureText(Font, ...)` por las métricas, texto UTF-8, un SPRITE texturizado por
+  glifo en coordenadas enteras, muestreado nearest; `FCanvasTextItem` (sombra, contorno, escala) y
+  `DrawShadowedString`. `DrawTile` con `UTexture`, UV, color y alfa; `FCanvasTileItem` con rotación sobre un pivote
+  (dos triángulos UV, para el minimapa de P7). Todo tile y línea mezcla ya por su alfa. `DrawCanvas` enlaza la textura
+  por la caché (TEX0 al cambiar, UV con la V girada, MODULATE, clamp, nearest 1:1 y bilineal si no); una textura no
+  residente espera al siguiente frame.
+- D7: escena de conformidad `TexturedCanvas` (la 21: PSMT4 con rampa de alfa en la CLUT, MODULATE y mezcla; sprites UV
+  en medios píxeles, nearest 1:1, girados en V y escalados bilineales; un quad rotado de triángulos UV), con su test
+  `System.GSReference.Texture.TexturedCanvas`; el emulador la iguala (0 píxeles fuera de 2); GSConformance.elf ahora
+  pone 4 x 6 celdas. Captura de PCSX2 en `Engine/Platforms/PS2/Documentation/Captures/GSConformance.png`.
+- UMG: `UHorizontalBox`/`UHorizontalBoxSlot`, `UButton` (`FButtonStyle`, eventos de UE), `UWidgetSwitcher`,
+  `UTableView` (columnas con cabecera, ancho fijo o de relleno y alineación, filas ordenables por columna con números
+  como números, fila resaltada que sigue a su fila, anchos de texto cacheados), `UImage` con brush de textura
+  (`FSlateBrush`), `UTextBlock` con fuente (`FSlateFontInfo`), sombra y tamaño cacheado. Foco y navegación:
+  `AHUD::InputKey` antes que el juego; el widget con foco y sus padres, luego flechas, cruceta y Tab mueven el foco al
+  más cercano en esa dirección entre los pintados (`FHittestGrid`, reglas explícitas); Accept (Enter, Espacio, Cruz)
+  pulsa y el soltar hace clic; en Win64 el ratón libre hace hover y clic (`AHUD::InputMouseMove`,
+  `IRendererModule::WindowToRenderTarget`). En SlateCore: `FGeometry`, `FReply`, `FKeyEvent`/`FPointerEvent`,
+  `EUINavigation`, `FNavigationConfig`.
+- D10: fuera `stb_easy_font`, `HudFontScale`, `HudLineHeight`, `FCanvas::DrawTextBlock`, la escala del texto del
+  canvas y `MeasureTextOnly`, con su regla en `CheckBannedApis.ps1`; STB queda solo en Desktop (LeonEd).
+- ShooterGame: HUD, menú de compra y overlay de depuración en la fuente de 14 px, mismo layout; capturas Win64 en
+  el scratchpad (`p5_hud_a.png`; `p5_hud_stats.png` con `stat unit`, la radio y el feed; `p5_canvas_reference.png`,
+  el frame del test de texto; `p5_gsconformance_pcsx2.png`).
+- Tests (588 del motor, 105 de ShooterGame): `System.Engine.Font.MetricsAndKerning`,
+  `System.Engine.Canvas.TextGlyphs` y `.TexturedTile`, `System.LeonEd.Factories.TrueTypeFont.Rasterize` e `.Import`,
+  `System.GSReference.Texture.TexturedCanvas`, `System.Renderer.GS.Canvas.Text` (el frame de la referencia, su CRC
+  tras verlo), `System.Renderer.GSEmulator.CanvasFrame`, `System.UMG.Focus.Navigation`, `System.UMG.Button.Activation`,
+  `System.UMG.Panels.HorizontalBoxAndSwitcher`, `System.UMG.Image.Texture`, `System.UMG.TableView.SortAndLayout`;
+  `GS.Canvas.Sprites`, `UMG.WidgetTree.LayoutAndPaint` y `ShooterGame.HUD.RoundInfo` actualizados (un sprite por
+  glifo).
+- BotMatch 10 7 idéntico dos veces y sin cambios respecto a P2b: `Botmatch OK: 10 round(s), CT 5 - T 5, 63 kill(s),
+  seed 7, sides switched after round 5`.
+- PCSX2 (`MeasurePS2`, fila «ps2-polish P5» en Budgets.md): 29,98 fps, p50/p95/p99 33,5 ms. El canvas (`Canvas
+  Flush`) baja de 2,89 a 1,45 ms (`GS Canvas` 1,33 ms): un glifo es un SPRITE de cuatro escrituras del GS donde
+  stb_easy_font dibujaba varias barras; el HUD (la pintura de los widgets) sube de 0,07 a 0,18 ms. La escena 9,15 ms
+  (8,53 en P1, ahora sobre P2 y P2b), GMalloc pico 4 289 KB.
+
+Desviaciones:
+- Las fuentes se rasterizan en la importación (LeonEd, como el `UTrueTypeFontFactory` de UE) y no en el cook: el
+  asset guarda ya las páginas PSMT4 y el cook las copia (no pasan por `FPalettedTextureBuilder`).
+- Un `UFont` por tamaño (el offline font de UE es de un tamaño); `FSlateFontInfo::Size` elige el del motor más
+  cercano cuando no hay `FontObject`.
+- El foco vive en el `UUserWidget` más externo (no hay `FSlateApplication`): un user widget solo toma teclas con algo
+  enfocado o con `bIsFocusable`, así el HUD no se come las del juego. La navegación analógica con el stick queda fuera
+  (cruceta, flechas y Tab).
+- La tabla es `UTableView` (UMG, columnas estilo `SHeaderRow` de UE) en vez de un `UListView` con widgets de entrada;
+  no recorta el texto que no cabe.
+- El marcador de ShooterGame sigue dibujado a mano con columnas alineadas por espacios, que la fuente proporcional ya no
+  alinea: P6 lo pasa a `UTableView`.
 
 **P6 · HUD y scoreboard nuevos (M)**
 - HUD rediseñado al estilo CS 1.6 con la fuente nueva e iconos (vida, blindaje, dinero, munición, tiempo, kill feed

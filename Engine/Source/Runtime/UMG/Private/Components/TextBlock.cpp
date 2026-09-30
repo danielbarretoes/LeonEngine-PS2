@@ -5,16 +5,36 @@ UTextBlock::UTextBlock(const FObjectInitializer& ObjectInitializer)
 {
 }
 
+void UTextBlock::SetText(const FText& InText)
+{
+	if (InText.ToString() != Text.ToString())
+	{
+		Text = InText;
+		bLayoutDirty = true;
+	}
+}
+
+void UTextBlock::SetFont(const FSlateFontInfo& InFontInfo)
+{
+	if (!(InFontInfo == Font))
+	{
+		Font = InFontInfo;
+		bLayoutDirty = true;
+	}
+}
+
 FVector2D UTextBlock::ComputeDesiredSize() const
 {
-	if (Text.IsEmpty())
+	if (bLayoutDirty)
 	{
-		return FVector2D::ZeroVector;
+		CachedSize = FVector2D::ZeroVector;
+		if (!Text.IsEmpty())
+		{
+			FPaintContext::MeasureText(Font, Text.ToString(), CachedSize.X, CachedSize.Y);
+		}
+		bLayoutDirty = false;
 	}
-	float Width = 0.0f;
-	float Height = 0.0f;
-	FPaintContext::MeasureTextOnly(Text.ToString(), HudFontScale, Width, Height);
-	return FVector2D(Width, Height);
+	return CachedSize;
 }
 
 void UTextBlock::OnPaint(FPaintContext& Ctx, const FVector2D& Position, const FVector2D& Size) const
@@ -26,5 +46,6 @@ void UTextBlock::OnPaint(FPaintContext& Ctx, const FVector2D& Position, const FV
 	const float X = Justification == ETextJustify::Center ? Position.X + (Size.X * 0.5f)
 		: Justification == ETextJustify::Right            ? Position.X + Size.X
 														  : Position.X;
-	Ctx.DrawText(Text.ToString(), X, Position.Y, ColorAndOpacity, HudFontScale, Justification);
+	Ctx.DrawText(
+		Font, Text.ToString(), X, Position.Y, ColorAndOpacity, Justification, ShadowOffset, ShadowColorAndOpacity);
 }

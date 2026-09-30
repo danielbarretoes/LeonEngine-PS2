@@ -9,17 +9,20 @@
 #include "Engine/VisibilityPortal.h"
 #include "Engine/World.h"
 #include "GS/GSSceneRenderer.h"
+#include "GSEmulator/PS2TexturePreview.h"
 #include "GSPrimitiveEmitter.h"
 #include "GSReferenceRasterizer.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/WorldSettings.h"
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/Crc.h"
 #include "Primitives.h"
 #include "SceneInterface.h"
 #include "SceneManagement.h"
 #include "SceneView.h"
 #include "StaticMeshSceneProxy.h"
+#include "Tests/CanvasTestScene.h"
 #include "Tests/ScopedTestWorld.h"
 #include "Tests/SkinnedTestMesh.h"
 #include "WorldEffectsGeometry.h"
@@ -37,6 +40,8 @@ namespace
 	constexpr int32 FrameHeight = 448;
 	constexpr uint32 ArenaFirstBlock = 280 * 32;
 	constexpr uint32 ArenaBlocks = (512 - 280) * 32;
+	/** System.Renderer.GS.Canvas.Text's frame, as verified (Docs/PLANS/ps2-polish.md P5). */
+	constexpr uint32 ExpectedCanvasTextCrc = 0x2ebd995cu;
 
 	/** A 640 x 448 PSMCT32 frame at FBP 0, its PSMZ24 Z buffer after it. */
 	FGSDrawEnvironment MakeEnvironment()
@@ -326,18 +331,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCanvasSpritesTest, "System.Renderer.GS.Canva
 
 bool FGSCanvasSpritesTest::RunTest(const FString& Parameters)
 {
-	// The canvas's tiles, text and lines along an axis go to the GS as SPRITEs of two vertices (N15), its slanted lines
-	// as triangles; the frame is the one two triangles a rectangle draw, pixel for pixel (SPRITE is StripsAndSprites'
-	// conformance scene: nothing new asked of the GS), with far fewer vertices.
+	// The canvas's flat tiles and lines along an axis go to the GS as SPRITEs of two vertices (N15), its slanted
+	// lines as triangles; the frame is the one two triangles a rectangle draw, pixel for pixel (SPRITE is
+	// StripsAndSprites' conformance scene: nothing new asked of the GS), with far fewer vertices. The text's
+	// textured sprites are System.Renderer.GS.Canvas.Text's.
 	FCanvas Canvas(FrameWidth, FrameHeight);
 	Canvas.DrawTile(10.0f, 20.0f, 300.0f, 60.0f, FLinearColor(0.1f, 0.2f, 0.3f));
 	Canvas.DrawTile(12.5f, 22.25f, 30.5f, 5.75f, FLinearColor(1.0f, 0.5f, 0.0f));
-	Canvas.DrawText(TEXT("HP 100  $800  1:45"), 20.0f, 30.0f, FColor(255, 255, 0), 2.0f);
 	Canvas.DrawLine(320.0f, 200.0f, 400.0f, 200.0f, FLinearColor::Green, 3.0f);
 	Canvas.DrawLine(320.0f, 210.0f, 320.0f, 300.0f, FLinearColor::Green, 2.0f);
 	Canvas.DrawLine(420.0f, 210.0f, 500.0f, 290.0f, FLinearColor::Red, 2.0f);
 	Canvas.PushDepthSortKey(1);
-	Canvas.DrawTextBlock(TEXT("stat unit\nFrame 33.5 ms"), 400.0f, 20.0f, FColor(200, 255, 200), 1.0f);
+	Canvas.DrawTile(400.0f, 20.0f, 100.0f, 30.0f, FLinearColor(0.0f, 0.0f, 0.0f, 0.5f));
 	Canvas.PopDepthSortKey();
 
 	TArray<FCanvasVertex> Vertices;
@@ -351,7 +356,7 @@ bool FGSCanvasSpritesTest::RunTest(const FString& Parameters)
 			Run.NumVertices / (Run.Type == ECanvasPrimitive::Rectangle ? 2 : 3);
 	}
 	TestEqual("The slanted line's two triangles", NumTriangles, 2);
-	TestTrue("Rectangles for the rest", NumRectangles > 20);
+	TestEqual("Rectangles for the rest", NumRectangles, 5);
 
 	const FGSDrawEnvironment Environment = MakeEnvironment();
 	FGSSceneRenderer Renderer;
@@ -429,6 +434,97 @@ bool FGSCanvasSpritesTest::RunTest(const FString& Parameters)
 	TestTrue("Something drawn", NumDrawn > 1000);
 	TestEqual("The same frame", NumDifferent, 0);
 	TestTrue("About a third of the vertices", NumSpriteVertices * 3 <= NumTriangleVertices + 12);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSCanvasTextTest, "System.Renderer.GS.Canvas.Text",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FGSCanvasTextTest::RunTest(const FString& Parameters)
+{
+	// The canvas's text and textured tiles through the texture cache, drawn by the reference rasterizer: the font's
+	// PSMT4 pages bound by TEX0 with their CLUT, a UV SPRITE a glyph sampled nearest, the scaled tile and the rotated
+	// quad bilinear; the text lands where its metrics put it, and the frame is the one it was when P5 was verified by
+	// eye (its CRC; Docs/PLANS/ps2-polish.md P5). System.Renderer.GSEmulator.CanvasFrame draws it on the emulator.
+	UTexture2D* Texture = CanvasTestScene::MakeTexture();
+	FCanvas Canvas(FrameWidth, FrameHeight);
+	CanvasTestScene::Draw(Canvas, Texture);
+	const FGSDrawEnvironment Environment = MakeEnvironment();
+	FGSSceneRenderer Renderer;
+	Renderer.GetTextureCache().SetArena(ArenaFirstBlock, ArenaBlocks);
+	Renderer.GetTextureCache().SetTextureConverter(&ConvertTextureAsPS2Cook);
+	Renderer.GetTextureCache().BeginFrame();
+	FGSCommandList List;
+	Environment.Append(List);
+	Renderer.DrawCanvas(Canvas, Environment, List);
+
+	int32 GlyphSprites = 0;
+	int32 TexturedTriangles = 0;
+	bool bPsmt4 = false;
+	bool bNearest = false;
+	bool bBilinear = false;
+	FGSPrim Prim;
+	for (const FGSRegisterWrite& Write : List.GetWrites())
+	{
+		if (Write.Register == EGSRegister::PRIM)
+		{
+			Prim = FGSPrim::Decode(Write.Value);
+		}
+		else if (Write.Register == EGSRegister::XYZ2 && Prim.bTextured && Prim.bUseUV)
+		{
+			GlyphSprites += Prim.Type == EGSPrimitive::Sprite ? 1 : 0;
+			TexturedTriangles += Prim.Type == EGSPrimitive::Triangle ? 1 : 0;
+		}
+		else if (Write.Register == EGSRegister::TEX0_1)
+		{
+			bPsmt4 |= FGSTex0::Decode(Write.Value).PSM == EGSPixelFormat::PSMT4;
+		}
+		else if (Write.Register == EGSRegister::TEX1_1)
+		{
+			bNearest |= FGSTex1::Decode(Write.Value).MMAG == EGSFilter::Nearest;
+			bBilinear |= FGSTex1::Decode(Write.Value).MMAG == EGSFilter::Linear;
+		}
+	}
+	TestTrue("The pages are PSMT4", bPsmt4);
+	TestTrue("Glyphs nearest, scaled and rotated tiles bilinear", bNearest && bBilinear);
+	TestTrue("Textured UV sprites (two vertices each)", GlyphSprites > 100 && (GlyphSprites % 2) == 0);
+	TestEqual("The rotated quad: two UV triangles", TexturedTriangles, 6);
+
+	const TArray<FColor> Frame = Rasterize(List, Environment);
+	const FColor Backdrop = Frame[0];
+	// The small text's box: glyph pixels in it, none left of its start.
+	const UFont* Small = UEngine::GetSmallFont();
+	const int32 Top = 100;
+	const int32 Bottom = Top + FMath::RoundToInt(Small->GetLineHeight());
+	int32 TextPixels = 0;
+	int32 LeftOfText = 0;
+	for (int32 Y = Top; Y < Bottom; ++Y)
+	{
+		for (int32 X = 0; X < 400; ++X)
+		{
+			const bool bText = Frame[(Y * FrameWidth) + X] != Backdrop;
+			TextPixels += bText && X >= 20 ? 1 : 0;
+			LeftOfText += bText && X < 19 ? 1 : 0;
+		}
+	}
+	TestTrue("The Latin-1 line draws", TextPixels > 300);
+	TestEqual("Nothing left of its pen", LeftOfText, 0);
+	// Right justified at 620: its last glyph ends at 620 at most.
+	int32 PastRight = 0;
+	for (int32 Y = 160; Y < 160 + FMath::RoundToInt(Small->GetLineHeight()); ++Y)
+	{
+		for (int32 X = 621; X < FrameWidth; ++X)
+		{
+			PastRight += Frame[(Y * FrameWidth) + X] != Backdrop ? 1 : 0;
+		}
+	}
+	TestEqual("Right justified: nothing past its end", PastRight, 0);
+	// The one-to-one tile: the image's top-left texel (its last row: bottom first) is opaque blue, at pixel (20, 200).
+	const FColor Corner = Frame[(200 * FrameWidth) + 20];
+	TestTrue("The tile's top-left texel", Corner.B > 180 && Corner.R < 100 && Corner.G < 100);
+	const uint32 Crc = FCrc::MemCrc32(Frame.GetData(), Frame.Num() * int32(sizeof(FColor)));
+	UE_LOG(LogTemp, Display, "%s", *FString::Printf("Canvas text frame CRC 0x%08x", Crc));
+	TestEqual("The frame as verified", Crc, ExpectedCanvasTextCrc);
 	return true;
 }
 
