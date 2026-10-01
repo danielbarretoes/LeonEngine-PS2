@@ -1,10 +1,13 @@
-"""Generates de_leon's sky, a desert day, as a high dynamic range environment for LeonEd's cube map import.
+"""Generates the maps' skies as high dynamic range environments for LeonEd's cube map import: de_leon's desert day
+and de_puerto's hazy coast at the end of the afternoon.
 
     python Game/ShooterGame/SourceArt/Sky/make_sky.py [--out <folder>]
 
-Writes Sky_Desert.hdr next to this script (`--out` writes there instead), which ImportList.ini imports as the cube map
-/Game/Sky/T_Sky_Desert (UTextureCubeFactory: six faces, tone-mapped; Docs/ART_PIPELINE.md, "The sky"). The map's world
-settings name it (Maps/make_de_leon.py's WorldSettings node).
+Writes Sky_Desert.hdr and Sky_Coast.hdr next to this script (`--out` writes there instead), which ImportList.ini
+imports as the cube maps /Game/Sky/T_Sky_Desert and /Game/Sky/T_Sky_Coast (UTextureCubeFactory: six faces, tone-mapped;
+Docs/ART_PIPELINE.md, "The sky"). The maps' world settings name them (Maps/make_de_leon.py's and
+Maps/make_de_puerto.py's WorldSettings nodes). Each sky is a preset (PRESETS) of the same painting: its colours, its
+haze, its clouds and the map script whose sun it shows.
 
 The image is a long-lat (equirectangular) panorama of WIDTH x HEIGHT texels in the engine's axes (X north, Y east, Z up;
 Docs/ASSET_FORMATS.md, "Cube maps"): column x looks at the yaw (x + 0.5) / WIDTH x 360 - 180 degrees (the middle column
@@ -14,10 +17,11 @@ HEIGHT x 180 degrees. Its texels are linear radiance, 1.0 a sky at the horizon's
 
 What it paints:
 
-- the sky's gradient: a deep blue zenith fading to a pale, warm haze at the horizon, brighter toward the sun's side;
-- below the horizon, the haze darkening to the colour of distant sand (the map's floor hides most of it);
-- the sun, where de_leon's baked sun is (SUN_DIRECTION, read from Maps/make_de_leon.py): a disc 1.5 degrees in radius,
-  far brighter than the sky (the tone mapping clips it to white), and its glow;
+- the sky's gradient: a deep blue zenith fading to a pale haze at the horizon (warm in the desert, a cool grey on the
+  coast, where it climbs higher), brighter toward the sun's side;
+- below the horizon, the haze darkening to the colour of distant sand, or of the sea (the map's floor hides most of it);
+- the sun, where the map's baked sun is (SUN_DIRECTION, read from the preset's map script): a disc 1.5 degrees in
+  radius, far brighter than the sky (the tone mapping clips it to white), and its glow;
 - soft clouds from seeded value noise (a fixed integer hash, five octaves) on a plane over the map, thinning toward the
   horizon and lit from the sun's side.
 
@@ -32,13 +36,12 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-MAP_SCRIPT = os.path.join(HERE, os.pardir, "Maps", "make_de_leon.py")
 
 # The panorama: 1024 x 512 gives the cube map's 256-texel faces a texel of the source for each of theirs.
 WIDTH = 1024
 HEIGHT = 512
 
-# Linear radiance (1.0: the horizon's haze on the side away from the sun).
+# The desert's preset (de_leon). Linear radiance (1.0: the horizon's haze on the side away from the sun).
 ZENITH = (0.10, 0.24, 0.62)
 HORIZON = (0.92, 0.88, 0.80)
 # How fast the zenith's blue gives way to the haze (a larger power keeps the haze lower).
@@ -65,17 +68,36 @@ CLOUD_COVER = (0.56, 0.80)
 CLOUD_LIT = (1.30, 1.26, 1.20)
 CLOUD_SHADE = (0.62, 0.64, 0.70)
 
+# The skies: (file, map script, the values above by name). The coast (de_puerto): a greyer zenith, a cool haze that
+# climbs higher, a warm glow toward the low sun, the sea below the horizon, more clouds from another seed.
+DESERT = {
+    "ZENITH": ZENITH, "HORIZON": HORIZON, "HAZE_POWER": HAZE_POWER, "SUN_SIDE_BRIGHTNESS": SUN_SIDE_BRIGHTNESS,
+    "GROUND": SAND, "SUN_COLOR": SUN_COLOR, "SUN_RADIANCE": SUN_RADIANCE, "GLOW_NEAR": GLOW_NEAR, "GLOW_FAR": GLOW_FAR,
+    "CLOUD_SEED": CLOUD_SEED, "CLOUD_FREQUENCY": CLOUD_FREQUENCY, "CLOUD_OFFSET": CLOUD_OFFSET,
+    "CLOUD_COVER": CLOUD_COVER, "CLOUD_LIT": CLOUD_LIT, "CLOUD_SHADE": CLOUD_SHADE,
+}
+COAST = dict(DESERT, **{
+    "ZENITH": (0.14, 0.27, 0.52), "HORIZON": (0.84, 0.86, 0.88), "HAZE_POWER": 2.2, "SUN_SIDE_BRIGHTNESS": 0.7,
+    "GROUND": (0.16, 0.25, 0.28), "SUN_COLOR": (1.0, 0.82, 0.6), "GLOW_NEAR": (2.8, 0.08), "GLOW_FAR": (0.6, 0.5),
+    "CLOUD_SEED": 2711, "CLOUD_FREQUENCY": 3.0, "CLOUD_OFFSET": (2.5, -1.5), "CLOUD_COVER": (0.50, 0.78),
+    "CLOUD_LIT": (1.30, 1.16, 1.0), "CLOUD_SHADE": (0.58, 0.61, 0.68),
+})
+PRESETS = [
+    ("Sky_Desert.hdr", "make_de_leon.py", DESERT),
+    ("Sky_Coast.hdr", "make_de_puerto.py", COAST),
+]
 
-def read_sun_direction():
-    """SUN_DIRECTION of Maps/make_de_leon.py (where the sun's light travels, engine axes), normalized."""
-    with open(MAP_SCRIPT, encoding="utf-8") as source:
+
+def read_sun_direction(map_script):
+    """SUN_DIRECTION of a map script in Maps/ (where the sun's light travels, engine axes), normalized."""
+    with open(os.path.join(HERE, os.pardir, "Maps", map_script), encoding="utf-8") as source:
         tree = ast.parse(source.read())
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "SUN_DIRECTION" for t in node.targets):
             x, y, z = ast.literal_eval(node.value)
             length = math.sqrt(x * x + y * y + z * z)
             return (x / length, y / length, z / length)
-    raise ValueError("Maps/make_de_leon.py has no SUN_DIRECTION")
+    raise ValueError("Maps/%s has no SUN_DIRECTION" % map_script)
 
 
 def hash01(x, y, seed):
@@ -105,13 +127,13 @@ def value_noise(x, y, seed):
     return top + (bottom - top) * fy
 
 
-def fbm(x, y):
+def fbm(x, y, seed):
     """Five octaves of value noise, each twice the frequency and half the weight of the one before, in [0, 1)."""
     total = 0.0
     weight = 0.5
     norm = 0.0
     for octave in range(CLOUD_OCTAVES):
-        total += weight * value_noise(x, y, CLOUD_SEED + octave * 97)
+        total += weight * value_noise(x, y, seed + octave * 97)
         norm += weight
         x = x * 2.03 + 17.1
         y = y * 2.03 - 5.3
@@ -128,8 +150,8 @@ def lerp(a, b, t):
     return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
 
 
-def radiance(direction, to_sun):
-    """The sky's linear radiance (r, g, b) along a unit direction."""
+def radiance(direction, to_sun, p):
+    """The sky's linear radiance (r, g, b) along a unit direction, with the preset p's values."""
     dx, dy, dz = direction
     cos_sun = dx * to_sun[0] + dy * to_sun[1] + dz * to_sun[2]
     angle = math.acos(min(max(cos_sun, -1.0), 1.0))
@@ -139,33 +161,35 @@ def radiance(direction, to_sun):
     facing = 0.0
     if horizontal > 1e-6 and sun_horizontal > 1e-6:
         facing = max((dx * to_sun[0] + dy * to_sun[1]) / (horizontal * sun_horizontal), 0.0)
-    horizon = tuple(c * (1.0 + SUN_SIDE_BRIGHTNESS * facing * facing) for c in HORIZON)
+    horizon = tuple(c * (1.0 + p["SUN_SIDE_BRIGHTNESS"] * facing * facing) for c in p["HORIZON"])
 
     if dz >= 0.0:
-        sky = lerp(horizon, ZENITH, 1.0 - (1.0 - dz) ** HAZE_POWER)
+        sky = lerp(horizon, p["ZENITH"], 1.0 - (1.0 - dz) ** p["HAZE_POWER"])
     else:
-        sky = lerp(horizon, SAND, smoothstep(0.0, 0.18, -dz))
+        sky = lerp(horizon, p["GROUND"], smoothstep(0.0, 0.18, -dz))
 
-    glow = GLOW_NEAR[0] * math.exp(-angle / GLOW_NEAR[1]) + GLOW_FAR[0] * math.exp(-angle / GLOW_FAR[1])
-    sky = tuple(sky[i] + SUN_COLOR[i] * glow for i in range(3))
+    glow_near, glow_far, sun_color = p["GLOW_NEAR"], p["GLOW_FAR"], p["SUN_COLOR"]
+    glow = glow_near[0] * math.exp(-angle / glow_near[1]) + glow_far[0] * math.exp(-angle / glow_far[1])
+    sky = tuple(sky[i] + sun_color[i] * glow for i in range(3))
 
     cloud = 0.0
     if dz > 0.0:
         # The cloud plane one unit above the eye, seen along the direction; thinner toward the horizon.
-        scale = CLOUD_FREQUENCY / (dz + 0.08)
-        noise = fbm(CLOUD_OFFSET[0] + dx * scale, CLOUD_OFFSET[1] + dy * scale)
-        density = smoothstep(CLOUD_COVER[0], CLOUD_COVER[1], noise)
+        scale = p["CLOUD_FREQUENCY"] / (dz + 0.08)
+        offset = p["CLOUD_OFFSET"]
+        noise = fbm(offset[0] + dx * scale, offset[1] + dy * scale, p["CLOUD_SEED"])
+        density = smoothstep(p["CLOUD_COVER"][0], p["CLOUD_COVER"][1], noise)
         cloud = density * smoothstep(0.03, 0.30, dz) * 0.9
     if cloud > 0.0:
         # Lit toward the sun, grey away from it; the glow shows through a thin cloud.
         lit = 0.5 + 0.5 * cos_sun
-        colour = lerp(CLOUD_SHADE, CLOUD_LIT, lit)
-        colour = tuple(colour[i] + SUN_COLOR[i] * glow * 0.35 for i in range(3))
+        colour = lerp(p["CLOUD_SHADE"], p["CLOUD_LIT"], lit)
+        colour = tuple(colour[i] + sun_color[i] * glow * 0.35 for i in range(3))
         sky = lerp(sky, colour, cloud)
 
     if angle < math.radians(SUN_RADIUS_DEGREES):
-        disc = SUN_RADIANCE * (1.0 - 0.6 * cloud)
-        sky = tuple(max(sky[i], SUN_COLOR[i] * disc) for i in range(3))
+        disc = p["SUN_RADIANCE"] * (1.0 - 0.6 * cloud)
+        sky = tuple(max(sky[i], sun_color[i] * disc) for i in range(3))
     return sky
 
 
@@ -229,22 +253,24 @@ def main(argv):
     if "--out" in argv and argv.index("--out") + 1 < len(argv):
         out = os.path.abspath(argv[argv.index("--out") + 1])
     os.makedirs(out, exist_ok=True)
-    sun = read_sun_direction()
-    to_sun = (-sun[0], -sun[1], -sun[2])
     yaws = [math.radians((x + 0.5) / WIDTH * 360.0 - 180.0) for x in range(WIDTH)]
     columns = [(math.cos(yaw), math.sin(yaw)) for yaw in yaws]
-    rows = []
-    for y in range(HEIGHT):
-        pitch = math.radians(90.0 - (y + 0.5) / HEIGHT * 180.0)
-        cos_pitch = math.cos(pitch)
-        sin_pitch = math.sin(pitch)
-        rows.append([to_rgbe(radiance((c * cos_pitch, s * cos_pitch, sin_pitch), to_sun)) for c, s in columns])
-    path = os.path.join(out, "Sky_Desert.hdr")
-    size = write_hdr(path, WIDTH, HEIGHT, rows)
-    elevation = math.degrees(math.asin(to_sun[2]))
-    azimuth = math.degrees(math.atan2(to_sun[1], to_sun[0]))
-    print("make_sky: wrote %s (%d x %d, %d bytes), the sun at yaw %.1f, pitch %.1f degrees"
-          % (path, WIDTH, HEIGHT, size, azimuth, elevation))
+    for name, map_script, preset in PRESETS:
+        sun = read_sun_direction(map_script)
+        to_sun = (-sun[0], -sun[1], -sun[2])
+        rows = []
+        for y in range(HEIGHT):
+            pitch = math.radians(90.0 - (y + 0.5) / HEIGHT * 180.0)
+            cos_pitch = math.cos(pitch)
+            sin_pitch = math.sin(pitch)
+            rows.append([to_rgbe(radiance((c * cos_pitch, s * cos_pitch, sin_pitch), to_sun, preset))
+                         for c, s in columns])
+        path = os.path.join(out, name)
+        size = write_hdr(path, WIDTH, HEIGHT, rows)
+        elevation = math.degrees(math.asin(to_sun[2]))
+        azimuth = math.degrees(math.atan2(to_sun[1], to_sun[0]))
+        print("make_sky: wrote %s (%d x %d, %d bytes), the sun at yaw %.1f, pitch %.1f degrees"
+              % (path, WIDTH, HEIGHT, size, azimuth, elevation))
     return 0
 
 

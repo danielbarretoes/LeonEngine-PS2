@@ -18,9 +18,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterContentMeshQuantizationTest, "ShooterGa
 
 bool FShooterContentMeshQuantizationTest::RunTest(const FString& Parameters)
 {
-	// Every static mesh of the project (de_leon's, the weapons', the characters'): LPS2 v2 spreads each axis of a mesh
+	// Every static mesh of the project (the maps', the weapons', the characters'): LPS2 v2 spreads each axis of a mesh
 	// over int16, so a drawn position is at most half a step, and at most 0.5 cm, from the source's (the collision
-	// triangles keep the source's positions: every drawn vertex must be that close to one of them). de_leon's actors
+	// triangles keep the source's positions: every drawn vertex must be that close to one of them). The maps' actors
 	// scale their meshes, and the error with them: in the world too, at most 0.5 cm.
 	constexpr float MaxError = 0.5f;
 	TArray<FString> Files;
@@ -68,33 +68,39 @@ bool FShooterContentMeshQuantizationTest::RunTest(const FString& Parameters)
 			Worst <= FMath::Min(MaxError, HalfStep + 0.001f));
 	}
 
-	UPackage* DeLeon = LoadPackage(nullptr, TEXT("/Game/Maps/de_leon"), LOAD_None);
-	if (!TestNotNull("de_leon", DeLeon))
+	// The maps' placed meshes (de_leon's, de_puerto's): in the world too, at most 0.5 cm.
+	for (const TCHAR* MapName : {TEXT("/Game/Maps/de_leon"), TEXT("/Game/Maps/de_puerto")})
 	{
-		return false;
-	}
-	int32 NumPlaced = 0;
-	float WorstPlaced = 0.0f;
-	for (TObjectIterator<UStaticMeshComponent> It; It; ++It)
-	{
-		if (It->GetOutermost() != DeLeon || It->GetStaticMesh() == nullptr)
+		UPackage* Map = LoadPackage(nullptr, MapName, LOAD_None);
+		if (!TestNotNull(MapName, Map))
 		{
 			continue;
 		}
-		const FLPS2MeshHeader& Header = It->GetStaticMesh()->GetLODResources().RenderData.GetHeader();
-		const FVector Scale = It->GetComponentTransform().GetScale3D().GetAbs();
-		// Half a step on each axis, through the component's scale (a rotation does not lengthen the error vector).
-		const float Error = 0.5f *
-			FMath::Sqrt(FMath::Square(Scale.X * Header.PositionScale[0]) +
-				FMath::Square(Scale.Y * Header.PositionScale[1]) + FMath::Square(Scale.Z * Header.PositionScale[2]));
-		WorstPlaced = FMath::Max(WorstPlaced, Error);
-		++NumPlaced;
+		int32 NumPlaced = 0;
+		float WorstPlaced = 0.0f;
+		for (TObjectIterator<UStaticMeshComponent> It; It; ++It)
+		{
+			if (It->GetOutermost() != Map || It->GetStaticMesh() == nullptr)
+			{
+				continue;
+			}
+			const FLPS2MeshHeader& Header = It->GetStaticMesh()->GetLODResources().RenderData.GetHeader();
+			const FVector Scale = It->GetComponentTransform().GetScale3D().GetAbs();
+			// Half a step on each axis, through the component's scale (a rotation does not lengthen the error vector).
+			const float Error = 0.5f *
+				FMath::Sqrt(FMath::Square(Scale.X * Header.PositionScale[0]) +
+					FMath::Square(Scale.Y * Header.PositionScale[1]) +
+					FMath::Square(Scale.Z * Header.PositionScale[2]));
+			WorstPlaced = FMath::Max(WorstPlaced, Error);
+			++NumPlaced;
+		}
+		UE_LOG(LogTemp, Display, "%s",
+			*FString::Printf("%s: %d placed meshes, worst quantization in the world %.4f cm", MapName, NumPlaced,
+				double(WorstPlaced)));
+		TestTrue(*FString::Printf("%s places meshes", MapName), NumPlaced > 0);
+		TestTrue(
+			*FString::Printf("%s's placed meshes within %.1f cm", MapName, double(MaxError)), WorstPlaced <= MaxError);
 	}
-	UE_LOG(LogTemp, Display, "%s",
-		*FString::Printf(
-			"de_leon: %d placed meshes, worst quantization in the world %.4f cm", NumPlaced, double(WorstPlaced)));
-	TestTrue("de_leon places meshes", NumPlaced > 0);
-	TestTrue(*FString::Printf("de_leon's placed meshes within %.1f cm", double(MaxError)), WorstPlaced <= MaxError);
 	return true;
 }
 

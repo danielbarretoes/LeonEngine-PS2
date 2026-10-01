@@ -7,6 +7,37 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **de_puerto**, ShooterGame's second bomb defusal map: a 64 × 56 m industrial port at the end of the afternoon (the
+  T truck yard to the south, the CT yard to the north, bomb site A on the quay apron under a gantry crane, bomb site B
+  in a roofed warehouse; three routes: A long along the quay to a chicane of container stacks, mid through a gate into
+  the CT spawn's courtyard, the alley to the warehouse's front door with a roofed connector from mid). An original
+  layout made by the same pipeline as de_leon with none of its art, to prove the pipeline does not depend on it
+  ([Docs/LEVELS.md](Docs/LEVELS.md#worked-example-de_puerto)).
+  - `Game/ShooterGame/SourceArt/Maps/make_de_puerto.py` (Blender through `leon_art`, deterministic, in
+    `check_art_determinism.py`'s list): 4 216 triangles in 112 pieces, 9 cells and 22 portals, 14 materials with
+    their own painted textures (asphalt, concrete, wall panels, corrugated sheet, steel, the crane's paint, three
+    containers' colours, pallet crates, water, shutters, the site plates) and physical materials, shared meshes for
+    the containers, crates, bollards and lamps, a late sun and seven baked lamps, the quay's clip, a ladder up a
+    container stack at A, 47 waypoints with three lookouts a site. The script also fails when two things at walking
+    height overlap.
+  - `Sky/make_sky.py` writes a second sky from presets, the coast (`Sky_Coast.hdr`, `/Game/Sky/T_Sky_Coast`): a greyer
+    zenith, a cool haze, a warm glow toward the low sun, the sea below the horizon. The desert's bytes are unchanged.
+  - The main menu offers both maps (`+MapNames=/Game/Maps/de_puerto`); the cook and the PS2 pak and ISO take it with
+    every map under `/Game/Maps` (the ISO: 8 464 384 bytes). PCSX2 (`MeasurePS2 -Map /Game/Maps/de_puerto`): 29.92 fps,
+    p50 / p95 / p99 33.5 / 33.5 / 34.0 ms, the scene 6.9 ms, GMalloc's peak 5 176 KB, `LoadMapMisc` 710 of 1 024 KB;
+    the same from the disc.
+  - The bots play it: over seeds 1 to 48 of the bot match the terrorists win 53 % of the rounds (de_leon 56 % over 1
+    to 24); `BotMatch.bat 10 7 /Game/Maps/de_puerto`: `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides
+    switched after round 5, reasons [3,3,4,4,4,3,3,3]`.
+- `BotMatch.bat [Rounds] [Seed] [Map]` and `MeasurePS2 -Map <map>`: a bot match on another map (`-map=`, which the
+  game already read); `RunGates.bat` plays de_puerto's bot match too (`BotMatchDePuerto`).
+- Tests: `ShooterGame.Map.DePuertoHoldsTheGame`, `TenPawnsOnDePuerto`, `NavigationCoverage` (both maps' waypoint
+  graphs are one piece and reach the sites and the starts), `ShooterGame.Bots.MatchOnDePuerto`; `RequiredTags` imports
+  de_puerto's source, `MeshQuantization` checks its placed meshes, the menu test steps the map list (129 ShooterGame
+  tests).
+
 ## [0.25.0] - 2026-10-01
 
 Polish from playing 0.24.0 ([ps2-polish](Docs/PLANS/ps2-polish.md) P0 to P10, with P2b, P3b, P5b and P8b): the

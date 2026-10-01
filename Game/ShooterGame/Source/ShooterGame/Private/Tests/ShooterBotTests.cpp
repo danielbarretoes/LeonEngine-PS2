@@ -26,7 +26,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 // P20's tests: the bots' decisions (buying, engaging, planting, defusing) on a small open map, and a headless match on
-// de_leon with a fixed seed whose rounds keep the game's invariants.
+// each map (de_leon, de_puerto) with a fixed seed whose rounds keep the game's invariants.
 
 namespace
 {
@@ -427,66 +427,87 @@ bool FShooterGameBotsMatchCheckerTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/**
+	 * Ten bots play three rounds of a map, headless, seed 5, at 60 Hz, under FShooterMatchChecker (every round ends
+	 * with a reason and a winner that matches it, the scores add up, the money stays within [0, 16000], nobody falls
+	 * through the floor); the waypoint graph is there, and the bots fight (kills happen).
+	 */
+	void PlayThreeRounds(FAutomationTestBase& Test, const TCHAR* MapName)
+	{
+		TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
+		Engine->Init(nullptr);
+		FWorldContext& Context = *Engine->GameInstance->GetWorldContext();
+		FString Error;
+		const FString URL = FString(MapName) + TEXT("?seed=5");
+		if (!Test.TestEqual("Browse",
+				static_cast<int32>(Engine->Browse(Context, FURL(nullptr, *URL, TRAVEL_Absolute), Error)),
+				static_cast<int32>(EBrowseReturnVal::Success)))
+		{
+			Test.AddError(Error);
+			Engine->PreExit();
+			return;
+		}
+		UWorld* World = Engine->GetGameWorld();
+		AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
+		if (!Test.TestNotNull("ShooterGameMode", GameMode))
+		{
+			Engine->PreExit();
+			return;
+		}
+		Test.TestTrue("The waypoint graph", World->GetNavigationSystem().GetNodes().Num() >= 10);
+		Test.TestEqual("The seed", GameMode->RandomSeed, 5);
+		// The player joined CT; the bots fill both teams (the player's pawn stands still). A match of four rounds: the
+		// teams switch sides after the second, so the three rounds cross the halftime (checked too).
+		(void)GameMode->FillTeamsWithBots();
+		GameMode->MaxRounds = 4;
+		AShooterGameState* State = GameMode->GetShooterGameState();
+		constexpr int32 RoundsToPlay = 3;
+		const int32 MaxFrames = RoundsToPlay *
+			static_cast<int32>(
+				(GameMode->FreezeTime + GameMode->RoundTime + 45.0f + GameMode->RoundRestartDelay + 2.0f) * 60.0f);
+		FShooterMatchChecker Checker;
+		for (int32 Frame = 0; Frame < MaxFrames && Checker.GetRoundsPlayed() < RoundsToPlay; ++Frame)
+		{
+			Engine->Tick(FrameTime, false);
+			const int32 RoundsBefore = Checker.GetRoundsPlayed();
+			Checker.Tick(*GameMode);
+			if (Checker.GetRoundsPlayed() > RoundsBefore)
+			{
+				UE_LOG(LogTemp, Display, TEXT("%s: round %d: %s (CT %d - T %d), %d kill(s)"), MapName,
+					State->GetRoundNumber(), GetRoundEndMessage(State->GetLastRoundEndReason()),
+					State->GetTeamScore(EShooterTeam::CT), State->GetTeamScore(EShooterTeam::T),
+					GameMode->GetNumKills());
+			}
+		}
+		Test.TestEqual("Three rounds played", Checker.GetRoundsPlayed(), RoundsToPlay);
+		Test.TestEqual("The teams switched sides once", Checker.GetNumHalftimes(), 1);
+		for (const FString& Violation : Checker.GetViolations())
+		{
+			Test.AddError(Violation);
+		}
+		Test.TestTrue("The bots fought", GameMode->GetNumKills() > 0);
+		Engine->PreExit();
+	}
+} // namespace
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsMatchOnDeLeonTest, "ShooterGame.Bots.MatchOnDeLeon",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
 bool FShooterGameBotsMatchOnDeLeonTest::RunTest(const FString& Parameters)
 {
-	// Ten bots play three rounds of de_leon, headless, seed 5, at 60 Hz, under FShooterMatchChecker (every round ends
-	// with a reason and a winner that matches it, the scores add up, the money stays within [0, 16000], nobody falls
-	// through the floor); the waypoint graph is there, and the bots fight (kills happen).
-	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
-	Engine->Init(nullptr);
-	FWorldContext& Context = *Engine->GameInstance->GetWorldContext();
-	FString Error;
-	if (!TestEqual("Browse",
-			static_cast<int32>(
-				Engine->Browse(Context, FURL(nullptr, TEXT("/Game/Maps/de_leon?seed=5"), TRAVEL_Absolute), Error)),
-			static_cast<int32>(EBrowseReturnVal::Success)))
-	{
-		AddError(Error);
-		Engine->PreExit();
-		return false;
-	}
-	UWorld* World = Engine->GetGameWorld();
-	AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
-	if (!TestNotNull("ShooterGameMode", GameMode))
-	{
-		Engine->PreExit();
-		return false;
-	}
-	TestTrue("The waypoint graph", World->GetNavigationSystem().GetNodes().Num() >= 10);
-	TestEqual("The seed", GameMode->RandomSeed, 5);
-	// The player joined CT; the bots fill both teams (the player's pawn stands still). A match of four rounds: the
-	// teams switch sides after the second, so the three rounds cross the halftime (checked too).
-	(void)GameMode->FillTeamsWithBots();
-	GameMode->MaxRounds = 4;
-	AShooterGameState* State = GameMode->GetShooterGameState();
-	constexpr int32 RoundsToPlay = 3;
-	const int32 MaxFrames = RoundsToPlay *
-		static_cast<int32>(
-			(GameMode->FreezeTime + GameMode->RoundTime + 45.0f + GameMode->RoundRestartDelay + 2.0f) * 60.0f);
-	FShooterMatchChecker Checker;
-	for (int32 Frame = 0; Frame < MaxFrames && Checker.GetRoundsPlayed() < RoundsToPlay; ++Frame)
-	{
-		Engine->Tick(FrameTime, false);
-		const int32 RoundsBefore = Checker.GetRoundsPlayed();
-		Checker.Tick(*GameMode);
-		if (Checker.GetRoundsPlayed() > RoundsBefore)
-		{
-			UE_LOG(LogTemp, Display, TEXT("MatchOnDeLeon: round %d: %s (CT %d - T %d), %d kill(s)"),
-				State->GetRoundNumber(), GetRoundEndMessage(State->GetLastRoundEndReason()),
-				State->GetTeamScore(EShooterTeam::CT), State->GetTeamScore(EShooterTeam::T), GameMode->GetNumKills());
-		}
-	}
-	TestEqual("Three rounds played", Checker.GetRoundsPlayed(), RoundsToPlay);
-	TestEqual("The teams switched sides once", Checker.GetNumHalftimes(), 1);
-	for (const FString& Violation : Checker.GetViolations())
-	{
-		AddError(Violation);
-	}
-	TestTrue("The bots fought", GameMode->GetNumKills() > 0);
-	Engine->PreExit();
+	PlayThreeRounds(*this, TEXT("/Game/Maps/de_leon"));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsMatchOnDePuertoTest, "ShooterGame.Bots.MatchOnDePuerto",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameBotsMatchOnDePuertoTest::RunTest(const FString& Parameters)
+{
+	// The second map, the same match: its waypoints, ladder and sites take the bots through three rounds.
+	PlayThreeRounds(*this, TEXT("/Game/Maps/de_puerto"));
 	return true;
 }
 

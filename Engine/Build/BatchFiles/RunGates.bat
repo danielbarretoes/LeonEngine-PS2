@@ -7,7 +7,7 @@ REM   tests      RunTests.bat (LeonAutomationTests with G8's GS parity, the Leon
 REM              ShooterGameTests, TestPAL on Win64)
 REM   G5         CheckReimport.bat with ShooterGame (needs a checkout without content changes)
 REM   G6         SmokeTest.bat
-REM   bot match  BotMatch.bat 10 7 (played twice, identically)
+REM   bot match  BotMatch.bat 10 7 (played twice, identically), on de_leon and on de_puerto
 REM   content    LeonCook -run=ValidateAssets for the engine and ShooterGame
 REM   -PS2       G3: Package.bat -NoWin64 (the PS2 artifacts in Docker; their ELF sizes go to Budgets.md by hand)
 REM   -Measure   MeasurePS2.bat (PCSX2, unattended; prints the Budgets.md row)
@@ -32,6 +32,7 @@ set "GATE_CMD="%~dp0RunTests.bat"" & call :Gate RunTests
 set "GATE_CMD="%~dp0CheckReimport.bat" "%PROJECT%"" & call :Gate CheckReimport
 set "GATE_CMD="%~dp0SmokeTest.bat"" & call :Gate SmokeTest
 set "GATE_CMD="%~dp0BotMatch.bat" 10 7" & call :Gate BotMatch
+set "GATE_CMD="%~dp0BotMatch.bat" 10 7 /Game/Maps/de_puerto" & call :Gate BotMatchDePuerto
 set "GATE_CMD="%~dp0Cook.bat" -run=ValidateAssets" & call :Gate ValidateEngine
 set "GATE_CMD="%~dp0Cook.bat" "%PROJECT%" -run=ValidateAssets" & call :Gate ValidateShooterGame
 if defined WITH_PS2 set "GATE_CMD="%LEON_ROOT%\Package.bat" -NoWin64" & call :Gate PackagePS2

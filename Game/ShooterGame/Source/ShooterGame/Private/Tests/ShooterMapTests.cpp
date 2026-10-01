@@ -30,13 +30,15 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// de_leon and its rules: the imported map holds what the game needs, the project's RequiredTags reject a map without
-// it, and a headless match on it places ten pawns at their teams' starts (gate G6 in a test).
+// The maps (de_leon, de_puerto) and their rules: each imported map holds what the game needs and its waypoint graph
+// covers it, the project's RequiredTags reject a map without it, and a headless match on each places ten pawns at their
+// teams' starts (gate G6 in a test).
 
 namespace
 {
 
 	const TCHAR* const DeLeon = TEXT("/Game/Maps/de_leon");
+	const TCHAR* const DePuerto = TEXT("/Game/Maps/de_puerto");
 
 	/** A mount point over a fresh folder of the project's Intermediate directory, for imports (never Content). */
 	class FScopedShooterTestContent
@@ -124,6 +126,166 @@ namespace
 		return Starts;
 	}
 
+	/** What a map of the game holds besides the required tags (ShooterGame.Map.*HoldsTheGame). */
+	struct FExpectedMap
+	{
+		const TCHAR* Name;
+		int32 NumLookouts;
+		int32 NumClimbs;
+		int32 NumClips;
+		int32 NumLadders;
+		/** The CT starts stand at least this far from Y = 0, out of mid's line (cm). */
+		float MinCTStartY;
+	};
+
+	/**
+	 * The imported map is the main menu's (its map list) and holds two bomb sites, the teams' buy zones and five starts
+	 * a team, the waypoint graph with its links, the lookouts and the ladders' climbs, its player clips, ladders and
+	 * sun.
+	 */
+	bool TestMapHoldsTheGame(FAutomationTestBase& Test, const FExpectedMap& Expected)
+	{
+		Test.TestTrue(
+			"The main menu's map", GetDefault<UShooterMainMenuWidget>()->MapNames.Contains(FString(Expected.Name)));
+		UPackage* Package = LoadPackage(nullptr, Expected.Name, LOAD_None);
+		UWorld* World = Package != nullptr ? UWorld::FindWorldInPackage(Package) : nullptr;
+		if (!Test.TestNotNull(*FString::Printf(TEXT("%s loads"), Expected.Name), World))
+		{
+			return false;
+		}
+		for (const TCHAR* Site : {TEXT("A"), TEXT("B")})
+		{
+			bool bFound = false;
+			for (const ATriggerVolume* Volume : FindActors<ATriggerVolume>(*World, FName(TEXT("BombSite"))))
+			{
+				bFound |= Volume->ActorHasTag(FName(Site));
+			}
+			Test.TestTrue(*FString::Printf(TEXT("Bomb site %s"), Site), bFound);
+		}
+		Test.TestEqual("Two bomb sites", FindActors<ATriggerVolume>(*World, FName(TEXT("BombSite"))).Num(), 2);
+		Test.TestEqual("Two buy zones", FindActors<ATriggerVolume>(*World, FName(TEXT("BuyZone"))).Num(), 2);
+		Test.TestEqual("Five CT starts", FindTeamStarts(*World, TEXT("CT")).Num(), 5);
+		Test.TestEqual("Five T starts", FindTeamStarts(*World, TEXT("T")).Num(), 5);
+		for (const APlayerStart* Start : FindTeamStarts(*World, TEXT("CT")))
+		{
+			Test.TestEqual("A CT start faces south", FMath::Abs(Start->GetActorRotation().Yaw), 180.0f, 0.01f);
+			Test.TestEqual("On the floor, at the capsule's centre", Start->GetActorLocation().Z, 92.0f, 0.01f);
+			Test.TestTrue(
+				"A CT start out of mid's line", FMath::Abs(Start->GetActorLocation().Y) >= Expected.MinCTStartY);
+		}
+		const TArray<ANavigationWaypoint*> Waypoints = FindActors<ANavigationWaypoint>(*World);
+		Test.TestTrue("A waypoint graph", Waypoints.Num() >= 10);
+		int32 NumLinks = 0;
+		int32 NumLookouts = 0;
+		int32 NumClimbs = 0;
+		for (const ANavigationWaypoint* Waypoint : Waypoints)
+		{
+			NumLinks += Waypoint->Links.Num();
+			NumLookouts += Waypoint->HasFlag(TEXT("Lookout")) ? 1 : 0;
+			for (const ANavigationWaypoint* Linked : Waypoint->Links)
+			{
+				Test.TestTrue("Links go both ways", Linked != nullptr && Linked->Links.Contains(Waypoint));
+				// ps2-polish P3: each ladder's foot linked to its top (the import's link across the climb).
+				NumClimbs += Linked != nullptr && Waypoint->HasFlag(TEXT("Ladder")) &&
+						Linked->HasFlag(TEXT("Ladder")) &&
+						Linked->GetActorLocation().Z - Waypoint->GetActorLocation().Z > 300.0f
+					? 1
+					: 0;
+			}
+		}
+		Test.TestTrue("Linked", NumLinks >= 2 * Waypoints.Num() - 2);
+		Test.TestEqual("The lookouts", NumLookouts, Expected.NumLookouts);
+		Test.TestEqual("The ladders climbed", NumClimbs, Expected.NumClimbs);
+		Test.TestEqual("The player clips", FindActors<ABlockingVolume>(*World).Num(), Expected.NumClips);
+		Test.TestEqual(
+			"The ladders", FindActors<ATriggerVolume>(*World, FName(TEXT("Ladder"))).Num(), Expected.NumLadders);
+		Test.TestEqual("The sun", FindActors<ADirectionalLight>(*World).Num(), 1);
+		return true;
+	}
+
+	/**
+	 * A headless engine opens a map with the player's team (`?team=CT`, the team menu's choice): the player joins CT at
+	 * a CT start, the nine bots join around it (4 CT, 5 T: AShooterGameMode::RebalanceBots), and after a second of play
+	 * the ten pawns stand on ten different starts of their teams (the G6 smoke, in a test), on the floor slabs (N29),
+	 * each on its spawn's surface. Returns the world (the engine still running) for the map's own checks, or null.
+	 */
+	UWorld* PlaceTenPawns(FAutomationTestBase& Test, UGameEngine& Engine, const TCHAR* MapName,
+		EPhysicalSurface CTSpawnSurface, EPhysicalSurface TSpawnSurface, float CTSpawnMinX)
+	{
+		Engine.Init(nullptr);
+		FWorldContext& Context = *Engine.GameInstance->GetWorldContext();
+		FString Error;
+		const FString URL = FString(MapName) + TEXT("?team=CT");
+		if (!Test.TestEqual("Browse",
+				static_cast<int32>(Engine.Browse(Context, FURL(nullptr, *URL, TRAVEL_Absolute), Error)),
+				static_cast<int32>(EBrowseReturnVal::Success)))
+		{
+			Test.AddError(Error);
+			return nullptr;
+		}
+		UWorld* World = Engine.GetGameWorld();
+		AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
+		APlayerController* Controller = Engine.GameInstance->GetFirstGamePlayer() != nullptr
+			? Engine.GameInstance->GetFirstGamePlayer()->PlayerController
+			: nullptr;
+		if (!Test.TestNotNull("ShooterGameMode", GameMode) || !Test.TestNotNull("The player", Controller))
+		{
+			return nullptr;
+		}
+		const AShooterPlayerState* PlayerState = Controller->GetPlayerState<AShooterPlayerState>();
+		Test.TestTrue("The player is CT", PlayerState != nullptr && PlayerState->GetTeam() == EShooterTeam::CT);
+
+		for (int32 Frame = 0; Frame < 60; ++Frame)
+		{
+			Engine.Tick(1.0f / 60.0f, false);
+		}
+
+		int32 NumCT = 0;
+		int32 NumT = 0;
+		GameMode->CountPawns(NumCT, NumT);
+		Test.TestEqual("Five CT pawns", NumCT, 5);
+		Test.TestEqual("Five T pawns", NumT, 5);
+		TSet<const APlayerStart*> Used;
+		for (const AShooterCharacter* Character : FindActors<AShooterCharacter>(*World))
+		{
+			const TArray<APlayerStart*> Starts =
+				FindTeamStarts(*World, Character->GetTeam() == EShooterTeam::CT ? TEXT("CT") : TEXT("T"));
+			const APlayerStart* Nearest = nullptr;
+			for (const APlayerStart* Start : Starts)
+			{
+				const FVector Delta = Start->GetActorLocation() - Character->GetActorLocation();
+				if (Delta.SizeSquared2D() < 1.0f)
+				{
+					Nearest = Start;
+				}
+			}
+			Test.TestNotNull("Standing on a start of its team", Nearest);
+			Test.TestEqual("On the ground", Character->GetActorLocation().Z, 0.0f, 0.5f);
+			Test.TestTrue("Walking", Character->IsMovingOnGround());
+			if (Nearest != nullptr)
+			{
+				Test.TestFalse("Alone on its start", Used.Contains(Nearest));
+				Used.Add(Nearest);
+			}
+			const bool bCTSpawn = Character->GetActorLocation().X > CTSpawnMinX;
+			Test.TestEqual(bCTSpawn ? TEXT("The CT spawn's floor") : TEXT("The T spawn's floor"),
+				Character->GetFloorSurface(), bCTSpawn ? CTSpawnSurface : TSpawnSurface);
+		}
+		Test.TestEqual("Ten different starts", Used.Num(), 10);
+		return World;
+	}
+
+	/** The surface a weapon trace from Start to End hits (its physical material's), SurfaceType_Max for none. */
+	EPhysicalSurface SurfaceAlong(UWorld& World, const FVector& Start, const FVector& End)
+	{
+		FCollisionQueryParams Params;
+		Params.bReturnPhysicalMaterial = true;
+		FHitResult Hit;
+		return World.GetPhysicsScene().LineTraceSingleByChannel(Hit, Start, End, COLLISION_WEAPON, Params)
+			? UPhysicalMaterial::DetermineSurfaceType(Hit.PhysMaterial.Get())
+			: SurfaceType_Max;
+	}
+
 } // namespace
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapDeLeonHoldsTheGameTest, "ShooterGame.Map.DeLeonHoldsTheGame",
@@ -131,73 +293,88 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapDeLeonHoldsTheGameTest, "ShooterGame
 
 bool FShooterMapDeLeonHoldsTheGameTest::RunTest(const FString& Parameters)
 {
-	// The imported map is the main menu's (its map list) and holds two bomb sites, the teams' buy zones and five
-	// starts a team, the waypoint graph with its links, a player clip, two ladders and the sun.
-	TestTrue("The main menu's map", GetDefault<UShooterMainMenuWidget>()->MapNames.Contains(FString(DeLeon)));
+	// de_leon: ps2-polish P3's three lookouts a site and two ladders to the roofs, the player clip at the low wall at
+	// B; the CT starts out of the mid doors' line.
 	TestEqual("The game mode", UGameMapsSettings::GetGlobalDefaultGameMode(),
 		FString(TEXT("/Script/ShooterGame.ShooterGameMode")));
-	UPackage* Package = LoadPackage(nullptr, DeLeon, LOAD_None);
-	UWorld* World = Package != nullptr ? UWorld::FindWorldInPackage(Package) : nullptr;
-	if (!TestNotNull("de_leon loads", World))
+	return TestMapHoldsTheGame(*this, {DeLeon, 6, 2, 1, 2, 550.0f});
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapDePuertoHoldsTheGameTest, "ShooterGame.Map.DePuertoHoldsTheGame",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterMapDePuertoHoldsTheGameTest::RunTest(const FString& Parameters)
+{
+	// de_puerto, the second map: three lookouts a site, the ladder up the container stack at A, the quay's clip (nobody
+	// falls into the water); the CT starts beside the courtyard's opening, out of mid's line.
+	TestMapHoldsTheGame(*this, {DePuerto, 6, 1, 1, 1, 450.0f});
+	const TArray<FString>& MapNames = GetDefault<UShooterMainMenuWidget>()->MapNames;
+	if (TestEqual("The menu offers two maps", MapNames.Num(), 2))
 	{
-		return false;
+		TestEqual("de_leon first", MapNames[0], FString(DeLeon));
+		TestEqual("de_puerto second", MapNames[1], FString(DePuerto));
 	}
-	for (const TCHAR* Site : {TEXT("A"), TEXT("B")})
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapNavigationCoverageTest, "ShooterGame.Map.NavigationCoverage",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterMapNavigationCoverageTest::RunTest(const FString& Parameters)
+{
+	// Every map's waypoint graph is one piece (each waypoint reaches every other along the links, the ladders' climbs
+	// included), and it covers what the bots go for: a waypoint within 3 m of each bomb site's middle and within 6 m of
+	// each player start.
+	for (const TCHAR* MapName : {DeLeon, DePuerto})
 	{
-		const TArray<ATriggerVolume*> Sites = FindActors<ATriggerVolume>(*World, FName(TEXT("BombSite")));
-		bool bFound = false;
-		for (const ATriggerVolume* Volume : Sites)
+		UPackage* Package = LoadPackage(nullptr, MapName, LOAD_None);
+		UWorld* World = Package != nullptr ? UWorld::FindWorldInPackage(Package) : nullptr;
+		if (!TestNotNull(*FString::Printf(TEXT("%s loads"), MapName), World))
 		{
-			bFound |= Volume->ActorHasTag(FName(Site));
+			continue;
 		}
-		TestTrue(*FString::Printf(TEXT("Bomb site %s"), Site), bFound);
-	}
-	TestEqual("Two bomb sites", FindActors<ATriggerVolume>(*World, FName(TEXT("BombSite"))).Num(), 2);
-	const TArray<ATriggerVolume*> BuyZones = FindActors<ATriggerVolume>(*World, FName(TEXT("BuyZone")));
-	TestEqual("Two buy zones", BuyZones.Num(), 2);
-	TestEqual("Five CT starts", FindTeamStarts(*World, TEXT("CT")).Num(), 5);
-	TestEqual("Five T starts", FindTeamStarts(*World, TEXT("T")).Num(), 5);
-	for (const APlayerStart* Start : FindTeamStarts(*World, TEXT("CT")))
-	{
-		TestEqual("A CT start faces south", FMath::Abs(Start->GetActorRotation().Yaw), 180.0f, 0.01f);
-		TestEqual("On the floor, at the capsule's centre", Start->GetActorLocation().Z, 92.0f, 0.01f);
-	}
-	const TArray<ANavigationWaypoint*> Waypoints = FindActors<ANavigationWaypoint>(*World);
-	TestTrue("A waypoint graph", Waypoints.Num() >= 10);
-	int32 NumLinks = 0;
-	for (const ANavigationWaypoint* Waypoint : Waypoints)
-	{
-		NumLinks += Waypoint->Links.Num();
-		for (const ANavigationWaypoint* Linked : Waypoint->Links)
+		const TArray<ANavigationWaypoint*> Waypoints = FindActors<ANavigationWaypoint>(*World);
+		if (!TestTrue(*FString::Printf(TEXT("%s: waypoints"), MapName), Waypoints.Num() > 0))
 		{
-			TestTrue("Links go both ways", Linked != nullptr && Linked->Links.Contains(Waypoint));
+			continue;
 		}
-	}
-	TestTrue("Linked", NumLinks >= 2 * Waypoints.Num() - 2);
-	// ps2-polish P3: three lookouts a site, and each ladder's foot linked to its top on the roof (the import's link
-	// across the climb); the CT starts out of the mid doors' line.
-	int32 NumLookouts = 0;
-	int32 NumClimbs = 0;
-	for (const ANavigationWaypoint* Waypoint : Waypoints)
-	{
-		NumLookouts += Waypoint->HasFlag(TEXT("Lookout")) ? 1 : 0;
-		for (const ANavigationWaypoint* Linked : Waypoint->Links)
+		TSet<const ANavigationWaypoint*> Reached;
+		TArray<const ANavigationWaypoint*> Open;
+		Reached.Add(Waypoints[0]);
+		Open.Add(Waypoints[0]);
+		while (Open.Num() > 0)
 		{
-			NumClimbs += Waypoint->HasFlag(TEXT("Ladder")) && Linked->HasFlag(TEXT("Ladder")) &&
-					Linked->GetActorLocation().Z - Waypoint->GetActorLocation().Z > 300.0f
-				? 1
-				: 0;
+			const ANavigationWaypoint* Waypoint = Open.Pop();
+			for (const ANavigationWaypoint* Linked : Waypoint->Links)
+			{
+				if (Linked != nullptr && !Reached.Contains(Linked))
+				{
+					Reached.Add(Linked);
+					Open.Add(Linked);
+				}
+			}
+		}
+		TestEqual(*FString::Printf(TEXT("%s: every waypoint reached"), MapName), Reached.Num(), Waypoints.Num());
+		auto NearestWaypoint = [&Waypoints](const FVector& Point)
+		{
+			float Nearest = TNumericLimits<float>::Max();
+			for (const ANavigationWaypoint* Waypoint : Waypoints)
+			{
+				Nearest = FMath::Min(Nearest, FVector::Dist2D(Waypoint->GetActorLocation(), Point));
+			}
+			return Nearest;
+		};
+		for (const ATriggerVolume* Site : FindActors<ATriggerVolume>(*World, FName(TEXT("BombSite"))))
+		{
+			TestTrue(*FString::Printf(TEXT("%s: a waypoint at %s's middle"), MapName, *Site->GetName()),
+				NearestWaypoint(Site->GetActorLocation()) <= 300.0f);
+		}
+		for (const APlayerStart* Start : FindActors<APlayerStart>(*World))
+		{
+			TestTrue(*FString::Printf(TEXT("%s: a waypoint near %s"), MapName, *Start->GetName()),
+				NearestWaypoint(Start->GetActorLocation()) <= 600.0f);
 		}
 	}
-	TestEqual("Six lookouts", NumLookouts, 6);
-	TestEqual("Two ladders climbed", NumClimbs, 2);
-	for (const APlayerStart* Start : FindTeamStarts(*World, TEXT("CT")))
-	{
-		TestTrue("A CT start out of the mid doors' line", FMath::Abs(Start->GetActorLocation().Y) >= 550.0f);
-	}
-	TestEqual("A player clip", FindActors<ABlockingVolume>(*World).Num(), 1);
-	TestEqual("Two ladders", FindActors<ATriggerVolume>(*World, FName(TEXT("Ladder"))).Num(), 2);
-	TestEqual("The sun", FindActors<ADirectionalLight>(*World).Num(), 1);
 	return true;
 }
 
@@ -206,12 +383,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapRequiredTagsTest, "ShooterGame.Map.R
 
 bool FShooterMapRequiredTagsTest::RunTest(const FString& Parameters)
 {
-	// The project's rules (DefaultEditor.ini): de_leon's source imports and a map without the game's volumes and
+	// The project's rules (DefaultEditor.ini): the maps' sources import and a map without the game's volumes and
 	// starts (the engine's axes map) is refused, naming every missing entry.
 	FScopedShooterTestContent Content;
 	UObject* DeLeonMap = UImportAssetsCommandlet::ImportAsset(SourceArtFile(TEXT("SourceArt/Maps/de_leon.glb")),
 		TEXT("/ShooterGameTest/Maps/de_leon"), FString(), TEXT("Map"), TMap<FString, FString>());
 	TestNotNull("de_leon passes", DeLeonMap);
+	UObject* DePuertoMap = UImportAssetsCommandlet::ImportAsset(SourceArtFile(TEXT("SourceArt/Maps/de_puerto.glb")),
+		TEXT("/ShooterGameTest/Maps/de_puerto"), FString(), TEXT("Map"), TMap<FString, FString>());
+	TestNotNull("de_puerto passes", DePuertoMap);
 
 	for (const TCHAR* Entry :
 		{TEXT("TriggerVolume:BombSite+A"), TEXT("TriggerVolume:BombSite+B"), TEXT("TriggerVolume:BuyZone+CT"),
@@ -233,90 +413,46 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapTenPawnsOnDeLeonTest, "ShooterGame.M
 
 bool FShooterMapTenPawnsOnDeLeonTest::RunTest(const FString& Parameters)
 {
-	// A headless engine opens de_leon with the player's team (`?team=CT`, the team menu's choice): the player joins CT
-	// at a CT start, the nine bots join around it (4 CT, 5 T: AShooterGameMode::RebalanceBots), and after a second of
-	// play the ten pawns stand on ten different starts of their teams (the G6 smoke, in a test). The surfaces are
-	// de_leon's physical materials (N30f): everybody walks on the floor slabs (N29), the T spawn's sand (dirt) and the
-	// CT spawn's paving (tile); a crate is wood and a wall concrete to a bullet.
+	// de_leon's physical materials (N30f): the T spawn's sand (dirt), the CT spawn's paving (tile, from X 9 m); a crate
+	// is wood, a wall concrete and a lamp of the tunnel metal to a bullet.
 	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
-	Engine->Init(nullptr);
-	FWorldContext& Context = *Engine->GameInstance->GetWorldContext();
-	FString Error;
-	const FString URL = FString(DeLeon) + TEXT("?team=CT");
-	if (!TestEqual("Browse", static_cast<int32>(Engine->Browse(Context, FURL(nullptr, *URL, TRAVEL_Absolute), Error)),
-			static_cast<int32>(EBrowseReturnVal::Success)))
+	if (UWorld* World = PlaceTenPawns(*this, *Engine, DeLeon, SHOOTER_SURFACE_Tile, SHOOTER_SURFACE_Dirt, 900.0f))
 	{
-		AddError(Error);
-		Engine->PreExit();
-		return false;
+		TestEqual("A T spawn crate: wood",
+			SurfaceAlong(*World, FVector(-2150.0f, 1100.0f, 300.0f), FVector(-2150.0f, 1100.0f, 0.0f)),
+			SHOOTER_SURFACE_Wood);
+		TestEqual("The T spawn's south wall: concrete",
+			SurfaceAlong(*World, FVector(-2900.0f, 0.0f, 200.0f), FVector(-3100.0f, 0.0f, 200.0f)),
+			SHOOTER_SURFACE_Concrete);
+		TestEqual("A lamp of the tunnel: metal",
+			SurfaceAlong(*World, FVector(-1200.0f, -1500.0f, 250.0f), FVector(-1200.0f, -1400.0f, 250.0f)),
+			SHOOTER_SURFACE_Metal);
 	}
-	UWorld* World = Engine->GetGameWorld();
-	AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
-	APlayerController* Controller = Engine->GameInstance->GetFirstGamePlayer() != nullptr
-		? Engine->GameInstance->GetFirstGamePlayer()->PlayerController
-		: nullptr;
-	if (!TestNotNull("ShooterGameMode", GameMode) || !TestNotNull("The player", Controller))
-	{
-		Engine->PreExit();
-		return false;
-	}
-	const AShooterPlayerState* PlayerState = Controller->GetPlayerState<AShooterPlayerState>();
-	TestTrue("The player is CT", PlayerState != nullptr && PlayerState->GetTeam() == EShooterTeam::CT);
+	Engine->PreExit();
+	return true;
+}
 
-	for (int32 Frame = 0; Frame < 60; ++Frame)
-	{
-		Engine->Tick(1.0f / 60.0f, false);
-	}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapTenPawnsOnDePuertoTest, "ShooterGame.Map.TenPawnsOnDePuerto",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-	int32 NumCT = 0;
-	int32 NumT = 0;
-	GameMode->CountPawns(NumCT, NumT);
-	TestEqual("Five CT pawns", NumCT, 5);
-	TestEqual("Five T pawns", NumT, 5);
-	TSet<const APlayerStart*> Used;
-	for (const AShooterCharacter* Character : FindActors<AShooterCharacter>(*World))
+bool FShooterMapTenPawnsOnDePuertoTest::RunTest(const FString& Parameters)
+{
+	// de_puerto's surfaces: both spawns concrete (the T yard's asphalt, the CT yard's slabs); a pallet crate is wood, a
+	// container metal and the boundary wall's panels concrete to a bullet.
+	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
+	if (UWorld* World =
+			PlaceTenPawns(*this, *Engine, DePuerto, SHOOTER_SURFACE_Concrete, SHOOTER_SURFACE_Concrete, 2000.0f))
 	{
-		const TArray<APlayerStart*> Starts =
-			FindTeamStarts(*World, Character->GetTeam() == EShooterTeam::CT ? TEXT("CT") : TEXT("T"));
-		const APlayerStart* Nearest = nullptr;
-		for (const APlayerStart* Start : Starts)
-		{
-			const FVector Delta = Start->GetActorLocation() - Character->GetActorLocation();
-			if (Delta.SizeSquared2D() < 1.0f)
-			{
-				Nearest = Start;
-			}
-		}
-		TestNotNull("Standing on a start of its team", Nearest);
-		TestEqual("On the ground", Character->GetActorLocation().Z, 0.0f, 0.5f);
-		TestTrue("Walking", Character->IsMovingOnGround());
-		if (Nearest != nullptr)
-		{
-			TestFalse("Alone on its start", Used.Contains(Nearest));
-			Used.Add(Nearest);
-		}
-		// The CT spawn (X from 9 m) is paved, the T spawn is sand.
-		const bool bOnPaving = Character->GetActorLocation().X > 900.0f;
-		TestEqual(
-			bOnPaving ? TEXT("The CT spawn's floor: the paving's tile") : TEXT("The T spawn's floor: the sand's dirt"),
-			Character->GetFloorSurface(), bOnPaving ? SHOOTER_SURFACE_Tile : SHOOTER_SURFACE_Dirt);
+		TestEqual("A T yard crate: wood",
+			SurfaceAlong(*World, FVector(-2200.0f, 650.0f, 300.0f), FVector(-2200.0f, 650.0f, 0.0f)),
+			SHOOTER_SURFACE_Wood);
+		TestEqual("A T yard container: metal",
+			SurfaceAlong(*World, FVector(-2880.0f, 1100.0f, 400.0f), FVector(-2880.0f, 1100.0f, 0.0f)),
+			SHOOTER_SURFACE_Metal);
+		TestEqual("The T yard's south wall: concrete",
+			SurfaceAlong(*World, FVector(-3100.0f, 0.0f, 200.0f), FVector(-3300.0f, 0.0f, 200.0f)),
+			SHOOTER_SURFACE_Concrete);
 	}
-	TestEqual("Ten different starts", Used.Num(), 10);
-	FCollisionQueryParams Params;
-	Params.bReturnPhysicalMaterial = true;
-	auto SurfaceAlong = [World, &Params](const FVector& Start, const FVector& End)
-	{
-		FHitResult Hit;
-		return World->GetPhysicsScene().LineTraceSingleByChannel(Hit, Start, End, COLLISION_WEAPON, Params)
-			? UPhysicalMaterial::DetermineSurfaceType(Hit.PhysMaterial.Get())
-			: SurfaceType_Max;
-	};
-	TestEqual("A T spawn crate: wood",
-		SurfaceAlong(FVector(-2150.0f, 1100.0f, 300.0f), FVector(-2150.0f, 1100.0f, 0.0f)), SHOOTER_SURFACE_Wood);
-	TestEqual("The T spawn's south wall: concrete",
-		SurfaceAlong(FVector(-2900.0f, 0.0f, 200.0f), FVector(-3100.0f, 0.0f, 200.0f)), SHOOTER_SURFACE_Concrete);
-	TestEqual("A lamp of the tunnel: metal",
-		SurfaceAlong(FVector(-1200.0f, -1500.0f, 250.0f), FVector(-1200.0f, -1400.0f, 250.0f)), SHOOTER_SURFACE_Metal);
 	Engine->PreExit();
 	return true;
 }

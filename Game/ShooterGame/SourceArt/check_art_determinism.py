@@ -6,8 +6,8 @@ N26's gate; plan decision D6: the scripts are the source of truth).
 Runs each script twice in Blender, headless (`--background --factory-startup`, `-- --out <temp folder>`), and compares
 every .glb of the two runs byte for byte, then with the .glb of that name next to the script (the committed one).
 Without arguments it checks every make_*.py under this folder that uses leon_art, and fails when one of the scripts
-the art needs is missing from that list (EXPECTED_SCRIPTS: the characters, the arms, the weapons, de_leon and the
-samples). The generators that need no Blender (PYTHON_SCRIPTS: the sky's HDR, ps2-polish P8) run twice with this
+the art needs is missing from that list (EXPECTED_SCRIPTS: the characters, the arms, the weapons, de_leon, de_puerto
+and the samples). The generators that need no Blender (PYTHON_SCRIPTS: the skies' HDRs, ps2-polish P8) run twice with this
 Python (`<script> --out <temp folder>`) and their .hdr files are compared the same way. The .blend files are not
 compared:
 Blender writes different bytes on every save. Blender is LEON_BLENDER, else Blender 5.2's default install; the glTF
@@ -29,10 +29,12 @@ EXPECTED_SCRIPTS = [
     os.path.join("Characters", "make_arms.py"),
     os.path.join("Characters", "make_characters.py"),
     os.path.join("Maps", "make_de_leon.py"),
+    os.path.join("Maps", "make_de_puerto.py"),
     os.path.join("Samples", "make_art_samples.py"),
     os.path.join("Weapons", "make_weapons.py"),
 ]
-# The Python standard library's generators, run without Blender: the sky (Sky/make_sky.py, its Sky_Desert.hdr).
+# The Python standard library's generators, run without Blender: the skies (Sky/make_sky.py: Sky_Desert.hdr and
+# Sky_Coast.hdr).
 PYTHON_SCRIPTS = [
     os.path.join("Sky", "make_sky.py"),
 ]

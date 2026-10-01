@@ -4,8 +4,8 @@ A map is a `.lmap` package that holds a world: its `UWorld` (the map's asset, na
 persistent level, the level's `AWorldSettings` and the actors with their components (plan decision D13,
 `PKG_ContainsMap`), as UE's `.umap`. `UEngine::LoadMap` opens one; a map is made by importing a glTF scene exported from
 Blender (LeonEd's `UGLTFMapFactory`, [below](#importing-a-map-from-gltf)) or by code that builds a world and saves it.
-The PS2 runtime loads maps the same way: ShooterGame opens `de_leon` from its pak on the EE, cooked by the PS2 target
-platform ([ps2-engine](PLANS/ps2-engine.md)).
+The PS2 runtime loads maps the same way: ShooterGame opens `de_leon` or `de_puerto` from its pak on the EE, cooked by
+the PS2 target platform ([ps2-engine](PLANS/ps2-engine.md)).
 
 Code: `Engine/Source/Runtime/Engine/Classes/Engine/World.h`, `Level.h`, the actor and component classes in
 `Engine/Source/Runtime/Engine/Classes/{Engine,GameFramework,Camera,Components,AI}/`,
@@ -392,6 +392,121 @@ The project's `RequiredTags` hold (both sites, both buy zones, both teams' start
 two ladders and the sun), import `de_leon.glb` and the AxisTest source under the project's rules (the second is
 refused: no sites, buy zones or team starts) and spawn ten pawns on the map; `ShooterGame.Bots.MatchOnDeLeon` plays
 three rounds on it.
+
+## Worked example: de_puerto
+
+ShooterGame's second map, a 64 × 56 m industrial port at the end of the afternoon, made by the same pipeline with
+nothing of de_leon's but the conventions: its own script (`Maps/make_de_puerto.py`, Blender through `leon_art`), its own
+painted textures and materials (`/Game/Maps/de_puerto/Materials`), its own sky (`/Game/Sky/T_Sky_Coast`, `make_sky.py`'s
+coast preset) and its own section of `ImportList.ini`. An original layout in the readable style of CS 1.6's maps: the
+terrorists' truck yard to the south, the counter-terrorists' yard to the north, bomb site A on the quay apron under a
+gantry crane to the east, bomb site B inside a roofed warehouse to the west, and three routes:
+
+- **A long**, the quay (10 m wide, along the water): from the T yard's apron by the customs shed's corner to a chicane
+  of two container stacks at its end, so the quay's line never reaches into the site;
+- **mid**, a container lane through a 3.5 m gate in a 4 m wall into the courtyard, the CT spawn's flank (a stack behind
+  the gate and a fence with a 6 m opening hide the CT spawn from mid);
+- **B short**, the alley to the warehouse's front door (a container 3.5 m inside it makes a vestibule, so the alley sees
+  nothing of the hall), with the **connector**, a 16 m roofed passage from mid to the alley.
+
+A is closed to the courtyard and most of the CT spawn by a wall of stacked containers (the CTs come in by a 6 m gap);
+B's second door is the CT spawn's (5 m). The water east of the quay (a clip along the edge) and a ship moored off it
+are scenery.
+
+```bat
+"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" --background --factory-startup ^
+    --python Game\ShooterGame\SourceArt\Maps\make_de_puerto.py
+python Game\ShooterGame\SourceArt\Sky\make_sky.py
+Engine\Binaries\Win64\LeonCook.exe Game\ShooterGame\ShooterGame.lproj -run=ImportAssets ^
+    -importlist=Game/ShooterGame/SourceArt/ImportList.ini
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe /Game/Maps/de_puerto?team=CT
+```
+
+```text
+       W (-Y)                       Y=0                         E (+Y)   (X north up; 1 character = 1 m across, 2 m down)
+  34 ###########################################################~~~
+  32 #CCC        ccc #        ########          XX          XX  ~~~   #  walls, sheds, blocks, fences (4 to 6.4 m)
+  30 #  bbbbbbbbbbb  #  ++    ########    ++     aaaaaaaaaaaa   ~~~   ^  roofed (the connector, the alley's shed) or
+  28 #  bbbbbbbbbbb  ^    ++            ++       aaaaaaaOOOaa   ~~~      under a lintel (the warehouse's doors)
+  26 #  ooobbbbbbbb  ^                +       OOOaccaaaHOOOaa   ~~~   o  a container (2.6 m)  O  a stack of two
+  24 #  ooobbbbbbbb  #                      ccOOOaaaaaaaOOOaa   ~~~   c  pallet crates (1.1 m)  C  big (1.6 m)
+  22 #  ooobbbbbbbb  #                        OOOaaaaaaaaaacc   ~~~   X  the crane's legs   H  the ladder (5.2 m)
+  20 #  ooobbbbbbbb  ##########      #########OOOaaaaaaaaaacc   ~~~   a  bomb site A        b  bomb site B
+  18 #  bbbbbbbbbbb  #                        OOXXaaCCaaaaaaXX  ~~~   +  CT starts          t  T starts
+  16 #ooooooobbbbbb  #         OOOOOO         OOOaaaaaaaaaaaa   ~~~   ~  the water
+  14 #ooooooo      cc#         OOOOOO         OOO               ~~~
+  12 #             cc# c                      OOO      OOOOOOO  ~~~   the warehouse (B): X 8 .. 32, Y -28 .. -12,
+  10 ##^^^^########### c                      OOO      OOOOOOO  ~~~   roofed at 6.4 m; its front door at X 8
+   8 #      #####################  #################            ~~~   <- mid's gate (3.5 m), the courtyard north of it
+   6 #      ################            ############OOOOOO      ~~~   <- A long's chicane
+   4 #    cc################            ############OOOOOO      ~~~
+   2 #    cc################ c          ############ c          ~~~
+   0 #      ################            ############            ~~~   alley | connector | mid | customs | A long
+  -2 #ooo   ^^^^^^^^^^^^^^^^            ############      ooo   ~~~
+  -4 #ooo   ################        cc  ############      ooo   ~~~
+  -6 #ooo   ################        cc  ############      ooo   ~~~
+  -8 #ooo   ################            ############      ooo   ~~~
+ -10 #^^^^^^################            ############        c   ~~~
+ -12 #^^^^^^                OOO      OOO                    c   ~~~   <- the aprons (X -18 .. -12), mid's stacks
+ -14 #^^^^^^                OOO      OOO                 ###    ~~~
+ -16 #^^^^^^                OOO      OOO                 ###    ~~~   the booth in A long's mouth
+ -18 #                                                          ~~~   the T yard (asphalt)
+ -22 #                                  cc                      ~~~
+ -26 ######        ooo                    oooooo        OOO     ~~~
+ -28 ######        ooo       tttttttttt   oooooo        OOO     ~~~
+ -32 ###########################################################~~~
+```
+
+| Cell | Where | Triangles | What stands in it |
+| --- | --- | ---: | --- |
+| `TSpawn` | X −32 … −18 | 574 | the truck yard, asphalt; a gatehouse in its south-west corner, containers, crates, the T starts and buy zone |
+| `LongA` | X −18 … 8, Y 6 … 28 | 464 | the quay (concrete) and the apron before it, the customs shed (shutters on two faces), the booth, a container, the chicane's first stack, crates |
+| `Mid` | X −18 … 8, Y −6 … 6 | 312 | the asphalt lane, a stack on each side of its mouth, crates, the gate at its north end |
+| `Connector` | X −18 … 8, Y −22 … −6 | 364 | the two blocks, the roofed passage between them (two lamps), the apron before the alley |
+| `Alley` | X −18 … 8, Y −28 … −22 | 224 | the alley to the warehouse's front door, its shed roof (a lamp), a container |
+| `Courtyard` | X 8 … 20, Y −12 … 12 | 250 | concrete, the stack across mid's line, the fence to the CT spawn with its 6 m opening |
+| `CTSpawn` | X 20 … 32, Y −12 … 12 | 172 | the harbour office against the north wall, the CT starts and buy zone |
+| `SiteA` | X 8 … 32, Y 12 … 28 | 790 | the quay apron, the container wall to the south, the chicane's second stack, the stack with the ladder and the A sign, crates, the crane's legs |
+| `SiteB` | X 8 … 32, Y −28 … −12 | 700 | the warehouse: its walls, doors and roof, four lamps, the vestibule's container, a container and crates, the B sign over the front door |
+| (none) | the quay's face, the water, the ship, the crane's beams and boom | 366 | always drawn: outside every cell, or wholly above `CELL_TOP` (7.5 m) |
+
+4 216 triangles in 112 pieces (de_leon: 2 244 in 78), 6 394 baked vertices against 8 lights (the sun, two lamps in the
+connector, one in the alley's shed, four in the warehouse). The textures (64 texels a metre; P4 but the corrugated
+sheet, P8):
+
+| Texture | Size | Colours | A repeat | On (its surface) |
+| --- | --- | --- | --- | --- |
+| `T_Asphalt_D` | 128 × 128 | 14 | 2 m | the T yard, mid, the aprons and the alley (Concrete) |
+| `T_Concrete_D` | 128 × 128 | 14 | 2 m | the quay, the courtyard, the CT spawn, the sites and the connector: cast slabs (Concrete) |
+| `T_Panel_D` | 128 × 128 | 11 | 2 m | the boundary walls, the fences and the small buildings: precast panels (Concrete) |
+| `T_Corrugated_D` | 128 × 128, P8 | 82 | 2 m | the customs shed, the blocks, the warehouse: painted corrugated sheet with rust streaks (Metal) |
+| `T_Girder_D` | 64 × 64 | 5 | 1 m | the roofs' tops and edges, the lintels, the ladder (Metal) |
+| `T_Crane_D` | 64 × 64 | 6 | 1 m | the gantry crane's worn yellow paint (Metal) |
+| `T_ContainerRed_D`, `Blue`, `Green` | 64 × 128 | 11 each | 1 × 2.6 m | the containers' corrugated walls and rails (Metal) |
+| `T_Pallet_D` | 64 × 64 | 13 | a face | the pine pallet crates (Wood) |
+| `T_Water_D` | 64 × 64 | 4 | 4 m | the harbour (Dirt: only a stray bullet reaches it) |
+| `T_Shutter_D`, `T_Signs_D` | 64 × 64, 128 × 64 | 8, 6 | a plaque | the customs shed's roller doors, the A and B plates (Metal) |
+
+| Nodes | Become |
+| --- | --- |
+| `<Cell>_*`, `Outside_*` | static mesh actors, each with its `UCX_<Node>_01` box (the sign's, the shutters', the ladder's inside their wall; the crane's top a box at its cab); the containers share `SM_Container_<Colour>_<X\|Y>` (one mesh a colour and an orientation, the second of a stack at 2.6 m), the crates `SM_Pallet` / `SM_PalletBig`, the bollards `SM_Bollard`, the lamps `SM_Lamp` |
+| `Clip_Quay` | a blocking volume along the quay's edge: nobody falls into the water |
+| `BombSite_A` (14 × 12 m) / `_B` (15 × 11 m), `BuyZone_CT` / `_T` | ShooterGame's trigger volumes |
+| `Ladder_A` | the ladder up the stack of two containers at A (5.2 m), climbed by the bots (`LadderAFoot` / `LadderATop`, flagged `Ladder`) |
+| `PlayerStart_CT` … `.004`, `PlayerStart_T` … `.004` | five starts a team; the CTs beside the courtyard's opening, out of mid's line (4.5 m and more from Y = 0), A's side and B's in turn |
+| `NavWaypoint_*` (47: the three routes, the courtyard, both yards, the sites' ways in, three `Lookout`s a site off the lanes' lines and deep in the sites, the ladder's foot and top and a waypoint on the stack) | the hand links (53) both ways, plus the 112 the import adds |
+| `Sun`, `Light_Connector_*`, `Light_Alley_01`, `Light_Warehouse_*` | the late sun (low, warm, from the south-west: the long shadows fall toward the water) and seven lamps, baked |
+| `VIS_<Cell>` (9), `PORTAL_<CellA>_<CellB>` (22) | the cells and portals: the warehouse is closed (its two doors are its only portals) and the connector's passage has a portal at each end, so a view inside them keeps few cells |
+| `WorldSettings` | `SkySettings.SkyCubemap` `/Game/Sky/T_Sky_Coast.T_Sky_Coast`, the fog from 25 to 90 m (`2500` / `9000`, hazier than de_leon's), a cooler sky light for the bake (`LightmassSettings.EnvironmentColor` `(R=0.72,G=0.82,B=1.0,A=1.0)`, `EnvironmentIntensity` `0.4`) |
+
+The script fails when a cell has more than 1 500 triangles, when two things at walking height overlap, when a waypoint
+link, a start or a site's middle runs into something, or when the hand graph is not one piece. The layout was tuned
+on the bot match (`BotMatch.bat 10 <seed> /Game/Maps/de_puerto`): with mid open to the CT spawn and both sites the
+terrorists won three rounds in four; the gate, the fence, the chicane, the vestibule and lookouts deep in the sites
+bring it to 53 % over seeds 1 to 48 (de_leon: 56 % over 1 to 24). ShooterGame's tests check the map as de_leon's
+(`ShooterGame.Map.DePuertoHoldsTheGame`, `TenPawnsOnDePuerto`, `RequiredTags`, `NavigationCoverage`,
+`ShooterGame.Bots.MatchOnDePuerto`, the meshes' quantization); `RunGates.bat` plays its bot match twice
+(`BotMatchDePuerto`).
 
 ## Engine maps
 

@@ -1,12 +1,13 @@
 # Measures a PS2 game's frame in PCSX2, unattended (Docs/PLANS/ps2-shipping.md N1).
 # Usage: Engine\Build\BatchFiles\MeasurePS2.bat [-Project Game\ShooterGame] [-Rounds 2] [-Seed 7] [-Seconds 120]
-#                                               [-NoBuild] [-TimeoutSeconds 900] [-Label <text>] [-Iso]
+#                                               [-Map <map>] [-NoBuild] [-TimeoutSeconds 900] [-Label <text>] [-Iso]
 #                                               [-ExtraArgs <game arguments>] (e.g. -novu1: the EE's C++ emitter)
 #                                               [-PakOrder <order file>] [-LogFileOpenOrder] [-CloseUp]
 #
 # 1. BuildCookRun -platform=PS2 -build -cook -stage -pak stages the game with its measuring command line (-NoBuild keeps
 #    the stage and only rewrites LeonCommandLine.txt): a bot match of -Rounds rounds with -Seed, the local player
-#    watching through a bot's eyes (-BotMatchSpectate), -LogFrameTimes, and -ExitAfterSeconds as a bound.
+#    watching through a bot's eyes (-BotMatchSpectate), -LogFrameTimes, and -ExitAfterSeconds as a bound; -Map plays
+#    that map (a long package name, /Game/Maps/de_puerto: -map=) instead of the game's BotMatchMapName.
 # 2. PCSX2 runs it without its window (-nogui) from a private data folder (<Project>\Saved\PCSX2) whose PCSX2.ini is the
 #    user's with Engine\Platforms\PS2\Build\PCSX2\Measure.ini on top: the console's EE and VU timings, host: on.
 # 3. The EE log is read until the game's `ProfileSummary:` line (UGameEngine at exit, after `FrameStats Summary:`), then
@@ -34,6 +35,7 @@ param(
 	[int]$Rounds = 2,
 	[int]$Seed = 7,
 	[int]$Seconds = 120,
+	[string]$Map = "",
 	[switch]$NoBuild,
 	[int]$TimeoutSeconds = 900,
 	[string]$Label = "",
@@ -61,6 +63,7 @@ $StageDir = Join-Path $ProjectDir "Saved\StagedBuilds\PS2"
 $StagedElf = Join-Path $StageDir "$ProjectName.elf"
 $GameArgs = "-botmatch -rounds=$Rounds -seed=$Seed -BotMatchSpectate -LogFrameTimes -ExitAfterSeconds=$Seconds"
 if ($CloseUp) { $GameArgs = "-botmatch -rounds=$Rounds -seed=$Seed -LogFrameTimes -ExitAfterSeconds=$Seconds" }
+if ($Map) { $GameArgs = "-map=$Map $GameArgs" }
 if ($ExtraArgs) { $GameArgs = "$GameArgs $ExtraArgs" }
 if ($LogFileOpenOrder) { $GameArgs += " -LogFileOpenOrder" }
 # The staged command line; the build's (-addcmdline=) goes without the close-up's quoted commands, which the file adds.
