@@ -7,8 +7,8 @@ sounds; de_puerto, the second map, was made after 0.25.0 to the same spec withou
 of truth) and D11 (glTF is the only mesh, skeletal mesh and animation format).
 
 Code: `Game/ShooterGame/SourceArt/leon_art.py` (the shared Blender helpers), `check_art_determinism.py`,
-`Samples/make_art_samples.py`, `Characters/make_characters.py` and `make_arms.py` (with `anim_body.py` and
-`anim_arms.py`), `Weapons/make_weapons.py`, `Maps/make_de_leon.py`, `Maps/make_de_puerto.py`, `Sounds/make_sounds.py`
+`Samples/make_art_samples.py`, `Characters/make_characters.py` (the skeleton and its clips), `make_cs16_characters.py`
+(the bodies) and `make_arms.py` (with `anim_body.py` and `anim_arms.py`), `Weapons/make_weapons.py`, `Maps/make_de_leon.py`, `Maps/make_de_puerto.py`, `Sounds/make_sounds.py`
 and `Sky/make_sky.py` (no Blender); the import in [ASSET_FORMATS.md](ASSET_FORMATS.md#skeletal-meshes-and-animations--gltf-import)
 and [LEVELS.md](LEVELS.md#importing-a-map-from-gltf); the commandlets in [TOOLS.md](TOOLS.md#importlistini).
 
@@ -245,7 +245,8 @@ floor slabs are dirt (the sand) and tile (the paving).
 
 ## Licenses: CC0 only
 
-Only CC0 (public domain) art enters ShooterGame. Every source file has a row in
+Only CC0 (public domain) art enters ShooterGame, but for one exception awaiting a decision: the bodies are Counter-Strike
+1.6's player models (Valve's), provided by the user, and are not CC0 (LICENSES.md). Every source file has a row in
 `Game/ShooterGame/SourceArt/LICENSES.md` with its origin: made by a script of this repository, or a CC0 download
 (its URL and author; the downloaded file is committed in `SourceArt`, never fetched at build time). Art whose license
 is unclear stays out, whatever its quality (the removed ThirdPerson template's Mixamo animations, for example).
@@ -253,22 +254,39 @@ is unclear stays out, whatever its quality (the removed ThirdPerson template's M
 ## The characters, arms and weapons
 
 [ps2-shipping](PLANS/ps2-shipping.md) N27, low-poly and textured in the style of Counter-Strike 1.6, every file made
-by a script with `leon_art` (the textures painted texel by texel, no external art; LICENSES.md):
+by a script with `leon_art`: the arms and the weapons modelled and painted texel by texel by code; the bodies are
+Counter-Strike 1.6's own player models, provided by the user and rigged to `SKEL_Body` by a script (below; not CC0:
+LICENSES.md):
 
 | Asset | Script | Triangles | Texture | Notes |
 | --- | --- | --- | --- | --- |
-| `SK_Body_CT` | `Characters/make_characters.py` | 932 | 128 × 128, P8 | blue-grey pixel camouflage, a dark vest with magazine pouches and a back plate, shoulder and knee pads, a helmet, black gloves and boots |
-| `SK_Body_T` | same | 828 | 128 × 128, P8 | a brown jacket with chest pockets over olive cargo trousers, a black balaclava with an eye slit, a backpack with a bedroll, a bandolier, brown gloves and boots |
+| `SK_Body_CT` | `Characters/make_cs16_characters.py` | 752 | 128 × 128, P8 | CS 1.6's SAS (`CS16/sas/cs_sas.fbx`): black fatigues, a vest, a gas mask with its goggles |
+| `SK_Body_T` | same | 752 | 128 × 128, P8 | CS 1.6's Leet Krew (`CS16/leet/cs_leet.fbx`): an olive jacket over brown trousers, sunglasses |
 | `SK_Arms_CT` | `Characters/make_arms.py` | 542 | 128 × 128, P8 | the camouflage sleeves to the wrist, black gloves |
 | `SK_Arms_T` | same | 588 | 128 × 128, P8 | the jacket's sleeves rolled up over bare forearms, a watch, brown gloves |
 | `SM_<Weapon>` (world) | `Weapons/make_weapons.py` | 116-260 | 64 × 64, P4 | knife 120, Glock 156, USP 156, Deagle 160, AK-47 196, M4A1 216, MP5 180, AWP 260, HE 140, flash 116, smoke 116, C4 140 |
 | `SM_<Weapon>_1P` (view) | same | 308-556 | 128 × 64, P8 | knife 308, Glock 384, USP 356, Deagle 328, AK-47 488, M4A1 448, MP5 364, AWP 520, HE 376, flash 336, smoke 336, C4 556 |
 
-- **Modelling** (`leon_art.MeshBuilder`): a mesh made part by part in the engine's axes: lofts of rings along a limb
-  (smooth), boxes, cylinders and chamfered prisms (flat), each part mapping a region of the texture atlas and
-  weighting its vertices to one bone or two (a joint's ring half and half). Every face turns to face out by itself.
-  A body is about 60 % limbs and torso, 40 % the team's gear; the weapons' first-person models add the small parts
-  (triggers, sights, rails, the pins' rings) and more sides to the cylinders.
+- **The bodies** (`make_cs16_characters.py`): each FBX (a GoldSrc model: a Valve biped, `Bip01 ...` and its helper
+  bones, one bone a vertex) is imported, turned to face +X and scaled so its shoulders are at `SKEL_Body`'s 1.45 m (the
+  SAS 1.83 m tall, the Leet 1.78 m). Its own skin weights are carried over: every biped bone and helper goes to the
+  `SKEL_Body` bone it moves with (the fingers and twists to their hand or limb, the spine's lower bone split by height
+  between `spine_01` and `spine_02`), or half and half to the two it sits between (the shoulders', elbows', wrists',
+  hips', knees' and ankles' helpers): at most two weights a vertex. The models already rest in a T pose with the palms
+  down, so the bind pose is `SKEL_Body`'s rest by moving only the limbs: each arm and leg bone of the model is turned
+  and stretched along itself onto its `SKEL_Body` bone (the legs, which stand apart, come together and straight), the
+  hands and feet only moved (the boots keep their shape, their soles on the floor), the torso and the head as they
+  are. The 512 × 512 skin is averaged 4 × 4 to 128 × 128 (the cook makes it P8: about 2 000 and 9 000 colours before);
+  the texture has no free block, so the few chrome triangles (GoldSrc's reflection-mapped goggles and sunglasses)
+  take the skin's texel nearest the chrome texture's average colour: one material and one texture a body, the same
+  VRAM as the painted bodies. The C4 backpack and the defuse kit (body groups CS draws only on their carrier) and
+  their textures are left out. The script renders nothing; the poses were checked in Blender and in the game (idle,
+  run, crouch, aim up and down, death, the rifle on `Weapon_R`).
+- **Modelling** (`leon_art.MeshBuilder`, the arms and the weapons): a mesh made part by part in the engine's axes:
+  lofts of rings along a limb (smooth), boxes, cylinders and chamfered prisms (flat), each part mapping a region of the
+  texture atlas and weighting its vertices to one bone or two (a joint's ring half and half). Every face turns to face
+  out by itself. The weapons' first-person models add the small parts (triggers, sights, rails, the pins' rings) and
+  more sides to the cylinders.
 - **The stances** (`anim_body.STANCES`): the body's locomotion holds a rifle; `AO_Rifle`, `AO_Pistol` and
   `AO_Grenade` pose their stance at five pitches and are all measured from the rifle's straight-ahead pose
   (`BasePose=A_Aim_Rifle_Center`), so a pistol's aim offset also turns the rifle's arms into the pistol's (UE: an aim

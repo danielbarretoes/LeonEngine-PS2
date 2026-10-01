@@ -6,9 +6,9 @@ N26's gate; plan decision D6: the scripts are the source of truth).
 Runs each script twice in Blender, headless (`--background --factory-startup`, `-- --out <temp folder>`), and compares
 every .glb of the two runs byte for byte, then with the .glb of that name next to the script (the committed one).
 Without arguments it checks every make_*.py under this folder that uses leon_art, and fails when one of the scripts
-the art needs is missing from that list (EXPECTED_SCRIPTS: the characters, the arms, the weapons, de_leon, de_puerto
-and the samples). The generators that need no Blender (PYTHON_SCRIPTS: the skies' HDRs, ps2-polish P8) run twice with this
-Python (`<script> --out <temp folder>`) and their .hdr files are compared the same way. The .blend files are not
+the art needs is missing from that list (EXPECTED_SCRIPTS: the skeleton and its clips, the CS 1.6 bodies, the arms,
+the weapons, de_leon, de_puerto and the samples). The generators that need no Blender (PYTHON_SCRIPTS: the skies'
+HDRs, ps2-polish P8) run twice with this Python (`<script> --out <temp folder>`) and their .hdr files are compared the same way. The .blend files are not
 compared:
 Blender writes different bytes on every save. Blender is LEON_BLENDER, else Blender 5.2's default install; the glTF
 exporter writes its version in the file, so another Blender version is expected to differ from the committed files.
@@ -28,6 +28,7 @@ DEFAULT_BLENDER = r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 EXPECTED_SCRIPTS = [
     os.path.join("Characters", "make_arms.py"),
     os.path.join("Characters", "make_characters.py"),
+    os.path.join("Characters", "make_cs16_characters.py"),
     os.path.join("Maps", "make_de_leon.py"),
     os.path.join("Maps", "make_de_puerto.py"),
     os.path.join("Samples", "make_art_samples.py"),

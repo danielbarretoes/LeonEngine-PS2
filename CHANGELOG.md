@@ -38,6 +38,23 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   de_puerto's source, `MeshQuantization` checks its placed meshes, the menu test steps the map list (129 ShooterGame
   tests).
 
+### Changed
+
+- **The team bodies are Counter-Strike 1.6's player models**: the SAS for the counter-terrorists (`SK_Body_CT`) and
+  the Leet Krew for the terrorists (`SK_Body_T`), provided by the user (Valve's models, Sketchfab downloads; not CC0:
+  `SourceArt/LICENSES.md`, the decision to ship them is pending). `SourceArt/Characters/make_cs16_characters.py`
+  (Blender through `leon_art`, deterministic, in `check_art_determinism.py`'s list) imports `CS16/<model>/*.fbx`,
+  carries the models' own GoldSrc weights from their Valve biped (`Bip01 ...` and its helpers) over to `SKEL_Body`'s
+  23 bones (at most two a vertex), turns and scales them onto `SKEL_Body`'s T pose (the limbs moved onto its bones, the
+  boots on the floor) so every third-person clip plays unchanged, and reduces the 512 × 512 skins to one 128 × 128
+  texture each (P8 in the cook: the same VRAM as before; the chrome's few triangles take the skin's nearest texel, the
+  backpack and the defuse kit are left out). 752 triangles each (were 932 and 828). Same asset names, so nothing in the
+  game changes: the hit groups, the capsule and the `Flesh` physical material are as they were. The painted bodies
+  are gone; `make_characters.py` keeps the skeleton, the clips and the teams' colours the first-person arms use.
+  The bot matches are unchanged (`Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7` on both maps); PCSX2
+  (`MeasurePS2`, de_leon): 29.62 fps, p50 / p95 / p99 33.5 / 33.5 / 33.5 ms, the scene 6.8 ms; each body's texture
+  23 KB of VRAM, as before.
+
 ## [0.25.0] - 2026-10-01
 
 Polish from playing 0.24.0 ([ps2-polish](Docs/PLANS/ps2-polish.md) P0 to P10, with P2b, P3b, P5b and P8b): the

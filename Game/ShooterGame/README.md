@@ -445,9 +445,9 @@ Low-poly and textured in the style of Counter-Strike 1.6 ([ps2-shipping](../../D
 [ART_PIPELINE.md](../../Docs/ART_PIPELINE.md#the-characters-arms-and-weapons)), made by the Blender scripts of
 `SourceArt/Characters` on the shared 23-bone `SKEL_Body` and the 11-bone `SKEL_Arms`:
 
-- **The counter-terrorist** (`SK_Body_CT`, 932 triangles): blue-grey camouflage, a vest, a helmet, black gloves;
-  **the terrorist** (`SK_Body_T`, 828): a brown jacket, olive trousers, a balaclava, a backpack. Their first-person
-  arms (`SK_Arms_CT` 542, `SK_Arms_T` 588) wear the same sleeves and gloves.
+- **The counter-terrorist** (`SK_Body_CT`, 752 triangles): Counter-Strike 1.6's SAS; **the terrorist** (`SK_Body_T`,
+  752): its Leet Krew (the user's CS 1.6 models rigged to `SKEL_Body` by `make_cs16_characters.py`; not CC0). Their
+  first-person arms (`SK_Arms_CT` 542, `SK_Arms_T` 588) are still the painted ones.
 - **The body** (`UCharacterAnimInstance`): the 2D locomotion by speed and direction (`BS_Locomotion`: idle, walk and
   run forward, back, left and right, with footsteps), crouched (`BS_Crouch`, silent), the jump's take-off, fall and
   landing, the drawn weapon's stance and aim by the view's pitch (`AO_Rifle`, `AO_Pistol`, `AO_Grenade`), the

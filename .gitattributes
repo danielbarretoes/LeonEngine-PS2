@@ -18,7 +18,7 @@ CMakeLists.txt text eol=lf
 Engine/Source/Programs/LeonHeaderTool/Tests/** text eol=lf
 
 # Binary content: packages (.lasset / .lmap), paks (.lpak, P16), binary glTF source art (.glb) and Blender sources (.blend,
-# P17), source sounds (.wav, P18), source HDR images (.hdr, ps2-polish P8)
+# P17), source sounds (.wav, P18), source HDR images (.hdr, ps2-polish P8), FBX models (.fbx: the CS 1.6 bodies' sources)
 *.lasset binary
 *.lmap binary
 *.glb binary
@@ -28,6 +28,7 @@ Engine/Source/Programs/LeonHeaderTool/Tests/** text eol=lf
 *.ttf binary
 *.lpak binary
 *.png binary
+*.fbx binary
 *.pdf binary
 
 # Mesh sources whose bytes are hashed at import (UAssetImportData's MD5, the import identity): no line-ending conversion
