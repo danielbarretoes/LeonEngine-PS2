@@ -6,6 +6,7 @@
 #include "WorldSettings.generated.h"
 
 class AGameModeBase;
+class UTexture2D;
 class UTextureCube;
 class APlayerState;
 
@@ -102,6 +103,50 @@ struct ENGINE_API FWorldSkySettings
 };
 
 /**
+ * A map's overview (Leon, Docs/PLANS/ps2-polish.md P7; CS 1.6's overviews, a picture and its position and scale in a
+ * text file beside the map): the map seen from above in orthographic, north (+X) up and east (+Y) right, made by
+ * LeonEd when the map is imported (FMapOverview), and the square of the world it shows. A game's radar draws it under
+ * its dots, turned with the view.
+ */
+USTRUCT()
+struct ENGINE_API FWorldOverviewSettings
+{
+	GENERATED_BODY()
+
+	/** The overview (none: the map has none). Its first texel row is the square's south edge, as a texture's are. */
+	UPROPERTY()
+	UTexture2D* Texture = nullptr;
+
+	/** The centre of the square it shows, world X and Y, cm. */
+	UPROPERTY()
+	FVector2D Center = FVector2D(0.0f, 0.0f);
+
+	/** The square's side, cm (0: no overview). */
+	UPROPERTY()
+	float Size = 0.0f;
+
+	/**
+	 * Where Location is on the overview: U from its west edge to its east edge, V from its north edge (the top, as a
+	 * canvas samples a texture) to its south edge; outside [0, 1] beyond the square. Z is ignored.
+	 */
+	[[nodiscard]] FVector2D GetUV(const FVector& Location) const
+	{
+		if (Size <= 0.0f)
+		{
+			return FVector2D(0.0f, 0.0f);
+		}
+		const float InvSize = 1.0f / Size;
+		return FVector2D(0.5f + ((Location.Y - Center.Y) * InvSize), 0.5f - ((Location.X - Center.X) * InvSize));
+	}
+
+	/** Whether there is an overview to draw. */
+	[[nodiscard]] bool IsValid() const
+	{
+		return Texture != nullptr && Size > 0.0f;
+	}
+};
+
+/**
  * Per-level settings (UE: AWorldSettings), an AInfo in the level that ULevel::GetWorldSettings returns: the first
  * actor of a map, saved with it.
  */
@@ -140,6 +185,10 @@ public:
 	/** The map's sky (Leon, ps2-polish P8; none by default). */
 	UPROPERTY()
 	FWorldSkySettings SkySettings;
+
+	/** The map's overview for a radar (Leon, ps2-polish P7; none by default: LeonEd makes it at the import). */
+	UPROPERTY()
+	FWorldOverviewSettings OverviewSettings;
 
 	/**
 	 * The player who paused the game, null while it plays (UE: GetPauserPlayerState / SetPauserPlayerState):

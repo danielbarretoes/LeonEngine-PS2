@@ -9,6 +9,23 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **The real minimap** ([ps2-polish](Docs/PLANS/ps2-polish.md) P7): the radar draws the map's overview under its dots,
+  turned with the view, as CS 1.6's overviews ([Docs/LEVELS.md](Docs/LEVELS.md#the-overview)).
+  - LeonEd's `FMapOverview` renders each map at its import, after the lighting bake: the GS scene renderer's frame of
+    the Static meshes (`FGSSceneCapture`, Renderer) in orthographic views on GSReference's software GS, no GPU, the
+    same bytes on every machine (`CheckReimport`). From above cut at 2.5 m for the floors, and from below, plain and
+    mirrored, to tell the obstacles (walls, houses, containers, crates); styled as CS's (greyer, flatter floors, dark
+    obstacles and outside, edge lines), 128 x 128 PSMT8 of one level, `<Map>/T_<Map>_Overview`, 17 KB of VRAM. LeonEd
+    links Renderer and GSReference for it; nothing opens a window.
+  - `AWorldSettings::OverviewSettings` (`FWorldOverviewSettings`: the texture, the square it shows, `GetUV`); the
+    project's `[/Script/LeonEd.MapImportSettings] bBuildOverview`, `OverviewResolution`, `OverviewClipHeight`,
+    `MapsWithoutOverview`; the engine's maps get none. The cook keeps a texture paletted already as it is and counts it
+    in its VRAM report (`CookerVersion` 2).
+  - `AShooterHUD::MakeRadarOverviewTriangles`: the radar square on the overview, clipped where it ends, at most six
+    textured triangles (`FCanvasTriangleItem`).
+  - PCSX2 (`MeasurePS2 -Label minimap`): 29.62 fps, p50 / p95 / p99 33.5 ms as 0.25.0, LoadMapMisc 710 of 1 024 KB.
+  - Tests: `System.LeonEd.MapOverview.RenderAndProject`, `System.Renderer.GSEmulator.RadarFrame` (G8),
+    `ShooterGame.HUD.RadarOverview`, and the maps' tests check their overviews (607 engine tests, 130 ShooterGame's).
 - **de_harbor**, ShooterGame's second bomb defusal map: a 64 × 56 m industrial port at the end of the afternoon (the
   T truck yard to the south, the CT yard to the north, bomb site A on the quay apron under a gantry crane, bomb site B
   in a roofed warehouse; three routes: A long along the quay to a chicane of container stacks, mid through a gate into

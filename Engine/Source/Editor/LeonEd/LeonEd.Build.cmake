@@ -6,5 +6,7 @@ leon_module(LeonEd
 	# pixel formats.
 	PUBLIC_DEPENDENCIES Core CoreUObject Engine TargetPlatform RenderCore
 	# TextureCompressor and GSCore: the PS2 cook's paletted textures and their VRAM report, and the GS debug font's layout.
-	PRIVATE_DEPENDENCIES AnimationCore MeshUtilities Json STB TextureCompressor GSCore
+	# Renderer and GSReference: a map's overview, the GS scene renderer's frame rasterized by the software GS
+	# (FMapOverview, Docs/PLANS/ps2-polish.md P7).
+	PRIVATE_DEPENDENCIES AnimationCore MeshUtilities Json STB TextureCompressor GSCore Renderer GSReference
 )

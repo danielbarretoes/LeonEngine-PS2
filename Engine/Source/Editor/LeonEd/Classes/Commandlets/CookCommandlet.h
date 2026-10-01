@@ -193,7 +193,7 @@ public:
 	 * The version of what the cook writes: bump it when a change to the cook or to a type's cooked serialization
 	 * changes the bytes of a cooked package, so the cook cache (GetCookKey) forgets what older cooks made.
 	 */
-	static constexpr int32 CookerVersion = 1;
+	static constexpr int32 CookerVersion = 2;
 
 	/**
 	 * The cook cache's key of a package (N23): SHA-1 over the cooker version, the package format version, the

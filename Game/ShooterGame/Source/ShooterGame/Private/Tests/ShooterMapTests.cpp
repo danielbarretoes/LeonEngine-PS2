@@ -6,10 +6,12 @@
 #include "Engine/GameEngine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/Texture2D.h"
 #include "Engine/TriggerVolume.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
+#include "GameFramework/WorldSettings.h"
 #include "GameMapsSettings.h"
 #include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
@@ -200,6 +202,31 @@ namespace
 		Test.TestEqual(
 			"The ladders", FindActors<ATriggerVolume>(*World, FName(TEXT("Ladder"))).Num(), Expected.NumLadders);
 		Test.TestEqual("The sun", FindActors<ADirectionalLight>(*World).Num(), 1);
+		// The overview for the radar (ps2-polish P7), made at the import: 128 x 128 PSMT8, one level, every start and
+		// the waypoints (where the players go) on it.
+		const AWorldSettings* WorldSettings = World->GetWorldSettings();
+		const FWorldOverviewSettings* Overview = WorldSettings != nullptr ? &WorldSettings->OverviewSettings : nullptr;
+		if (Test.TestTrue("The overview", Overview != nullptr && Overview->IsValid()))
+		{
+			Test.TestTrue("128 x 128 PSMT8, one level",
+				Overview->Texture->GetSizeX() == 128 && Overview->Texture->GetSizeY() == 128 &&
+					Overview->Texture->GetPixelFormat() == PF_P8 && Overview->Texture->GetNumMips() == 1);
+			bool bAllOnIt = true;
+			auto OnIt = [Overview](const FVector& Location)
+			{
+				const FVector2D UV = Overview->GetUV(Location);
+				return UV.X > 0.0f && UV.X < 1.0f && UV.Y > 0.0f && UV.Y < 1.0f;
+			};
+			for (const APlayerStart* Start : FindActors<APlayerStart>(*World))
+			{
+				bAllOnIt &= OnIt(Start->GetActorLocation());
+			}
+			for (const ANavigationWaypoint* Waypoint : Waypoints)
+			{
+				bAllOnIt &= OnIt(Waypoint->GetActorLocation());
+			}
+			Test.TestTrue("The starts and the waypoints on the overview", bAllOnIt);
+		}
 		return true;
 	}
 

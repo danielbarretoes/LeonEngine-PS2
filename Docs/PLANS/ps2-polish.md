@@ -426,18 +426,56 @@ Desviaciones:
 - La latencia del jugador humano es `0`: juega en local, no hay red.
 - Las fuentes negritas, ya paletizadas, no cuentan en el informe de VRAM del cook (como las de P5); el atlas sí.
 
-**P7 · Minimapa real (M) — no hecha — pendiente**
-- Commandlet `-run=BuildOverview` en LeonCook: renderiza el mapa desde arriba en ortográfica con `FGSReferenceRasterizer`
-  (sin depender de GPU), lo paletiza a P8 256² y guarda `T_<Mapa>_Overview` y su rectángulo en el mundo
-  (`AWorldSettings` o un actor `AShooterOverview`); se regenera en la importación del mapa (determinista, G5).
-- El radar (`DrawRadar`, `ShooterHUD.cpp:236`) dibuja la imagen rotada y recortada bajo los puntos (quad texturizado
-  de P5).
-- Tests: el overview es determinista; proyección mundo→imagen; el radar dibuja la textura.
+**P7 · Minimapa real (M) — hecha** (después de 0.25.0, en la rama `feature/minimap-stress`)
+- Commandlet `-run=BuildOverview` en LeonCook: renderiza el mapa desde arriba en ortográfica con `FGSReferenceRasterizer`
+  (sin depender de GPU), lo paletiza a P8 256² y guarda `T_<Mapa>_Overview` y su rectángulo en el mundo
+  (`AWorldSettings` o un actor `AShooterOverview`); se regenera en la importación del mapa (determinista, G5).
+- El radar (`DrawRadar`, `ShooterHUD.cpp:236`) dibuja la imagen rotada y recortada bajo los puntos (quad texturizado
+  de P5).
+- Tests: el overview es determinista; proyección mundo→imagen; el radar dibuja la textura.
+
+Estado: hecha.
+- Arquitectura: el overview es el último paso de la importación del mapa (tras el horneado de la luz), no un commandlet
+  ni una herramienta aparte: así forma parte del contenido reproducible del mapa (G5, `CheckReimport`) sin otro paso.
+  LeonEd enlaza Renderer y GSReference (como los commandlets de UE corren en el editor, que tiene su renderer); nada abre
+  una ventana ni arranca un RHI. `FGSSceneCapture` (Renderer, `Public/`, solo escritorio) graba la vista de los
+  `UStaticMeshComponent` Static y visibles de un mundo con el propio `FGSSceneRenderer` (una `FScene` suya, sin cielo
+  ni niebla, el conversor de texturas del cook de PS2, sin presupuesto de subida) y se queda viva hasta que la lista se
+  rasteriza: la lista apunta a las texturas convertidas (`UploadImageInPlace`). `FMapOverview` (LeonEd) rasteriza tres
+  vistas ortográficas de 512² en `FGSReferenceRasterizer` (sin GPU, los mismos bytes en toda máquina): desde arriba,
+  cortada a `OverviewClipHeight` (250 cm: colores y alturas de los suelos), y desde abajo, desde 1 m hacia arriba,
+  una normal y otra en espejo (el culling al revés): un punto cuya primera cara por encima mira hacia arriba está dentro
+  de algo sólido (pared, casa, contenedor, caja) y se pinta como obstáculo. Los ojos van a 100 m del mapa, fuera de
+  toda celda de visibilidad (dentro de una, los portales recortarían la vista).
+- Estilo (barato, a lo CS): suelos con su color más gris y su luz aplanada a medias (las sombras horneadas se suavizan),
+  obstáculos gris oscuro, el exterior más oscuro, una línea oscura en el borde de obstáculos y escalones de más de 40
+  cm; promediado a 128² y paletizado a PSMT8 de un nivel (`FPalettedTextureBuilder`): `<Mapa>/T_<Mapa>_Overview`,
+  17 KB de VRAM. El cook lo deja como está y lo cuenta en su informe (`paletted already`; `CookerVersion` 2).
+- Mundo: `AWorldSettings::OverviewSettings` (`FWorldOverviewSettings`: `Texture`, `Center`, `Size`, `GetUV`, norte
+  arriba, este a la derecha); el cuadrado son las celdas de visibilidad del mapa más 2 m (de_harbor deja fuera el agua
+  y el barco), o sin celdas los límites de sus mallas: de_leon 64 m, de_harbor 68 m, unos 50 cm por texel, la escala del
+  radar (88 px para 50 m). Configuración: `[/Script/LeonEd.MapImportSettings] bBuildOverview`, `OverviewResolution`,
+  `OverviewClipHeight`, `MapsWithoutOverview` (el menú principal); los mapas del motor nunca.
+- Radar: `AShooterHUD::MakeRadarOverviewTriangles` lleva las esquinas del cuadrado del radar a las UV del overview
+  (girado con la vista), recorta el polígono al cuadrado UV (Sutherland-Hodgman) y lo abanica en dos a seis
+  `FCanvasUVTri`; `DrawRadar` lo dibuja con un `FCanvasTriangleItem` sobre el fondo y bajo el cono, las letras y los
+  puntos. Sin overview, el cuadrado oscuro de antes.
+- Tests: `System.LeonEd.MapOverview.RenderAndProject` (cuadrado, proyección mundo→imagen, bloque rojo donde proyecta,
+  torre como obstáculo, suelo bajo un tejado, PSMT8 128² de un nivel, mismos bytes dos veces),
+  `System.Renderer.GSEmulator.RadarFrame` (G8: un radar con overview PSMT8 girado y recortado, emulador contra
+  referencia), `ShooterGame.HUD.RadarOverview` (UV a yaw 0 y 90, recorte en el borde, una tanda de triángulos bajo los
+  puntos) y los tests de mapa comprueban el overview de de_leon y de_harbor (todas las salidas y waypoints dentro).
+  607 tests del motor, 130 de ShooterGame. `CheckReimport` idéntico byte a byte.
+- PCSX2 (`MeasurePS2 -Label minimap`, de_leon desde el menú): 29,62 fps, p50 / p95 / p99 33,5 ms (como 0.25.0), escena
+  6,60 ms, HUD y canvas 0,20 + 2,27 ms, LoadMapMisc 710 KB de 1 024, GMalloc pico 4 828 KB; VRAM de_leon 515 KB y
+  de_harbor 564 KB de 1 856. Capturas del radar en Win64 (los dos mapas) y en PCSX2 (de_harbor).
 
-Estado: no hecha — pendiente. El radar sigue dibujando puntos sobre negro. Hay un borrador sin compilar
-(`BuildOverview`, la captura de la escena, el radar y sus tests) en la rama `wip/ps2-polish-p7-minimap`, en
-`Docs/PLANS/ps2-polish-p7-draft/`: es anterior a los cambios de P8 en `AWorldSettings` y el renderer, y queda abierto si
-LeonCook debe enlazar Renderer y GSReference o si el overview va en una herramienta aparte. Sigue en `Docs/PENDING.md`.
+Desviaciones:
+- No hay commandlet `BuildOverview` (el borrador lo tenía): el overview se rehace al reimportar el mapa, como su luz.
+- 128² P8 y no 256²: a la escala del radar 128 ya da un texel por píxel, y cuesta 17 KB en vez de 65.
+- El estilo usa el ambiente horneado del mapa (los suelos conservan algo de sus sombras), no un color plano por
+  material.
+- El borrador de `wip/ps2-polish-p7-minimap` queda sustituido; la rama se borra.
 
 **P8 · Cielo (M) — hecha**
 - Generador procedural (script Python versionado, D6): cielo de desierto HDR (degradado, sol, nubes) a cubemap, con
@@ -598,7 +636,7 @@ Estado: hecha.
   (`LoadMap: /Game/Maps/MainMenu`, primer frame a 1,50 s).
 
 Desviaciones:
-- P7 (minimapa real) no se hizo: queda pendiente con su borrador en la rama `wip/ps2-polish-p7-minimap`.
+- P7 (minimapa real) no se hizo en 0.25.0: se hizo después (ver P7).
 - La media de fps queda por debajo de 30 solo por el primer frame (el viaje desde el menú); todo frame posterior va a
   33,5 ms.
 - En esta máquina la caché de CMake del build de Win64 se había creado desde una unidad `subst` (`p:`); el primer Lint

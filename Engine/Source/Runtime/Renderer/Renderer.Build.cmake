@@ -12,4 +12,6 @@ leon_module(Renderer
 		Private/RendererModule.cpp
 		Private/Shader.cpp
 		Private/GSEmulator/*.cpp
+		# FGSSceneCapture: the desktop tools' capture (LeonEd's map overview), with the desktop's texture converter.
+		Private/Capture/*.cpp
 )

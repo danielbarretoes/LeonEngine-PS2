@@ -114,6 +114,55 @@ namespace
 		return true;
 	}
 
+	/**
+	 * Describes a texture that is paletted already (a map's overview, made PF_P8 by LeonEd: the cook keeps it as it
+	 * is) for the reports and budgets; false for any other.
+	 */
+	bool DescribePaletted(const UTexture2D& Texture, FCookedTexture& OutInfo)
+	{
+		const FTexturePlatformData& Data = Texture.GetPlatformData();
+		if (!Texture.HasValidPlatformData() || (Data.PixelFormat != PF_P8 && Data.PixelFormat != PF_P4))
+		{
+			return false;
+		}
+		OutInfo.Name = Texture.GetPathName();
+		OutInfo.SourceSizeX = Data.SizeX;
+		OutInfo.SourceSizeY = Data.SizeY;
+		OutInfo.SizeX = Data.SizeX;
+		OutInfo.SizeY = Data.SizeY;
+		OutInfo.Format = Data.PixelFormat;
+		OutInfo.NumMips = Texture.GetNumMips();
+		// The colours its texels use: the palette's entries, counted from the indices of level 0 (after the CLUT).
+		const int64 NumBytes = GetPixelFormatDataSize(Data.PixelFormat, Data.SizeX, Data.SizeY);
+		const int64 NumTexels = int64(Data.SizeX) * Data.SizeY;
+		const int64 IndexBytes = Data.PixelFormat == PF_P4 ? (NumTexels + 1) / 2 : NumTexels;
+		bool bUsed[256] = {};
+		const uint8* Bytes = static_cast<const uint8*>(Data.Mips[0].BulkData.LockReadOnly());
+		for (int64 Index = NumBytes - IndexBytes; Index < NumBytes; ++Index)
+		{
+			if (Data.PixelFormat == PF_P4)
+			{
+				bUsed[Bytes[Index] & 0x0f] = true;
+				bUsed[Bytes[Index] >> 4] = true;
+			}
+			else
+			{
+				bUsed[Bytes[Index]] = true;
+			}
+		}
+		Data.Mips[0].BulkData.Unlock();
+		OutInfo.SourceColors = 0;
+		for (const bool bEntry : bUsed)
+		{
+			OutInfo.SourceColors += bEntry ? 1 : 0;
+		}
+		const EGSPixelFormat GSFormat = Data.PixelFormat == PF_P4 ? EGSPixelFormat::PSMT4 : EGSPixelFormat::PSMT8;
+		FGSTextureLayout::FFootprint Footprint;
+		FGSTextureLayout::GetFootprint(GSFormat, uint32(Data.SizeX), uint32(Data.SizeY), OutInfo.NumMips, Footprint);
+		OutInfo.Blocks = Footprint.NumBlocks;
+		return true;
+	}
+
 	/** Whether the platform plays the SPU2's ADPCM (both Leon platforms). */
 	[[nodiscard]] bool WantsSpuAdpcmSounds(const ITargetPlatform& TargetPlatform)
 	{
@@ -781,6 +830,16 @@ bool UCookCommandlet::CookPackage(const FString& PackageName, const ITargetPlatf
 					Info.Format == PF_P4 ? TEXT("PSMT4") : TEXT("PSMT8"), Info.SourceColors, Info.NumMips,
 					*BlocksToKB(Info.Blocks));
 				Backups.Add(MoveTemp(Backup));
+				if (OutTextures != nullptr)
+				{
+					OutTextures->Add(Info);
+				}
+			}
+			else if (Texture != nullptr && DescribePaletted(*Texture, Info))
+			{
+				UE_LOG(LogCook, Display, "Cook: %s %dx%d %s (%d colours), %d level(s), %s, paletted already",
+					*Info.Name, Info.SizeX, Info.SizeY, Info.Format == PF_P4 ? TEXT("PSMT4") : TEXT("PSMT8"),
+					Info.SourceColors, Info.NumMips, *BlocksToKB(Info.Blocks));
 				if (OutTextures != nullptr)
 				{
 					OutTextures->Add(Info);

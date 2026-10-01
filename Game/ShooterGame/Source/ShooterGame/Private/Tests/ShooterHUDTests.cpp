@@ -5,11 +5,13 @@
 #include "CoreMinimal.h"
 #include "Engine/BlockingVolume.h"
 #include "Engine/Font.h"
+#include "Engine/Level.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/Texture2D.h"
 #include "Engine/TriggerVolume.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerStart.h"
+#include "GameFramework/WorldSettings.h"
 #include "InputCoreTypes.h"
 #include "Misc/App.h"
 #include "Misc/AutomationTest.h"
@@ -593,6 +595,120 @@ bool FShooterGameHUDFrameStatsTest::RunTest(const FString& Parameters)
 	}
 	TestFalse("And shows it again", HUD->GetFrameStatsText().IsEmpty());
 	FApp::SetDeltaTime(DeltaTime);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameHUDRadarOverviewTest, "ShooterGame.HUD.RadarOverview",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterGameHUDRadarOverviewTest::RunTest(const FString& Parameters)
+{
+	// The radar draws the map's overview under its dots (ps2-polish P7): the radar's square goes to the overview's UVs
+	// around the view, turned with the yaw (north up at yaw 0), clipped to the texture near the map's edge; a map
+	// without an overview keeps the dark square.
+	FWorldOverviewSettings Overview;
+	Overview.Texture = UTexture2D::CreateTransient(64, 64);
+	Overview.Center = FVector2D::ZeroVector;
+	Overview.Size = 10000.0f;
+	TArray<FCanvasUVTri, TInlineAllocator<8>> Triangles;
+	auto UVAt = [&Triangles](const FVector2D& Screen, FVector2D& OutUV)
+	{
+		for (const FCanvasUVTri& Triangle : Triangles)
+		{
+			for (const TPair<FVector2D, FVector2D>& Corner :
+				{TPair<FVector2D, FVector2D>(Triangle.V0_Pos, Triangle.V0_UV),
+					TPair<FVector2D, FVector2D>(Triangle.V1_Pos, Triangle.V1_UV),
+					TPair<FVector2D, FVector2D>(Triangle.V2_Pos, Triangle.V2_UV)})
+			{
+				if (Corner.Key.Equals(Screen, 0.01f))
+				{
+					OutUV = Corner.Value;
+					return true;
+				}
+			}
+		}
+		return false;
+	};
+	// A 100 pixel square at (10, 10), 2500 cm from its centre to its edge.
+	FVector2D UV;
+	TestEqual("Inside the map: a quad",
+		AShooterHUD::MakeRadarOverviewTriangles(
+			Overview, FVector::ZeroVector, 0.0f, 2500.0f, 10.0f, 10.0f, 100.0f, Triangles),
+		2);
+	TestTrue("Yaw 0: the top left is north-west",
+		UVAt(FVector2D(10.0f, 10.0f), UV) && UV.Equals(FVector2D(0.25f, 0.25f), 1.0e-4f));
+	TestTrue("The bottom right south-east",
+		UVAt(FVector2D(110.0f, 110.0f), UV) && UV.Equals(FVector2D(0.75f, 0.75f), 1.0e-4f));
+	(void)AShooterHUD::MakeRadarOverviewTriangles(
+		Overview, FVector(1000.0f, 0.0f, 0.0f), 90.0f, 2500.0f, 10.0f, 10.0f, 100.0f, Triangles);
+	// Facing east (+Y): the top left corner is 2500 cm ahead (east) and 2500 cm to the left (north).
+	TestTrue("Yaw 90: the top left is north-east",
+		UVAt(FVector2D(10.0f, 10.0f), UV) && UV.Equals(FVector2D(0.75f, 0.15f), 1.0e-4f));
+	// At the map's northern edge, turned: clipped where the overview ends, every UV in the texture.
+	const int32 Clipped = AShooterHUD::MakeRadarOverviewTriangles(
+		Overview, FVector(4500.0f, 0.0f, 0.0f), 30.0f, 2500.0f, 10.0f, 10.0f, 100.0f, Triangles);
+	bool bInside = Clipped > 0;
+	for (const FCanvasUVTri& Triangle : Triangles)
+	{
+		for (const FVector2D& Corner : {Triangle.V0_UV, Triangle.V1_UV, Triangle.V2_UV})
+		{
+			bInside &= Corner.X >= 0.0f && Corner.X <= 1.0f && Corner.Y >= 0.0f && Corner.Y <= 1.0f;
+		}
+		for (const FVector2D& Corner : {Triangle.V0_Pos, Triangle.V1_Pos, Triangle.V2_Pos})
+		{
+			bInside &= Corner.X >= 10.0f - 1.0e-3f && Corner.X <= 110.0f + 1.0e-3f && Corner.Y >= 10.0f - 1.0e-3f &&
+				Corner.Y <= 110.0f + 1.0e-3f;
+		}
+	}
+	TestTrue("Near the edge: clipped, every UV in the texture, every corner in the square", bInside && Clipped <= 6);
+	TestEqual("Off the map: nothing",
+		AShooterHUD::MakeRadarOverviewTriangles(
+			Overview, FVector(20000.0f, 0.0f, 0.0f), 0.0f, 2500.0f, 10.0f, 10.0f, 100.0f, Triangles),
+		0);
+	TestEqual("No overview: nothing",
+		AShooterHUD::MakeRadarOverviewTriangles(
+			FWorldOverviewSettings(), FVector::ZeroVector, 0.0f, 2500.0f, 10.0f, 10.0f, 100.0f, Triangles),
+		0);
+
+	// The HUD's frame: without an overview the dark square; with one its triangles, textured by it, under the dots.
+	FScopedTestWorld TestWorld;
+	UWorld& World = *TestWorld;
+	AShooterGameMode* GameMode = SetUpMatch(World, 2, 1);
+	AShooterPlayerController* Player = AddLocalPlayer(World, *GameMode, EShooterTeam::CT);
+	TickUntil(World, *GameMode, EShooterRoundState::Live);
+	AShooterHUD* HUD = Cast<AShooterHUD>(Player->MyHUD);
+	if (World.GetWorldSettings() == nullptr)
+	{
+		World.PersistentLevel->SetWorldSettings(World.SpawnActor<AWorldSettings>());
+	}
+	AWorldSettings* WorldSettings = World.GetWorldSettings();
+	if (!TestNotNull("The player's HUD", HUD) || !TestNotNull("The world's settings", WorldSettings))
+	{
+		return false;
+	}
+	{
+		const FHUDFrame Frame(*HUD);
+		TestFalse("No overview: the dark square", HUD->WasRadarOverviewDrawn());
+	}
+	WorldSettings->OverviewSettings = Overview;
+	const FHUDFrame Frame(*HUD);
+	TestTrue("Drawn", HUD->WasRadarOverviewDrawn());
+	int32 OverviewRuns = 0;
+	int32 RectanglesAfter = 0;
+	for (const FCanvasPrimitiveRun& Run : Frame.Runs)
+	{
+		if (Run.Texture == Overview.Texture)
+		{
+			OverviewRuns += Run.Type == ECanvasPrimitive::Triangle ? 1 : 0;
+		}
+		else if (OverviewRuns > 0 && Run.Type == ECanvasPrimitive::Rectangle && Run.Texture == nullptr)
+		{
+			++RectanglesAfter;
+		}
+	}
+	TestEqual("One run of the overview's triangles", OverviewRuns, 1);
+	TestTrue("The dots after it (on top)", RectanglesAfter > 0);
+	WorldSettings->OverviewSettings = FWorldOverviewSettings();
 	return true;
 }
 

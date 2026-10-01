@@ -1,18 +1,11 @@
 # Pending
 
-What is left after [ps2-polish](PLANS/ps2-polish.md) (0.25.0), on top of what the
+What is left after [ps2-polish](PLANS/ps2-polish.md) (0.25.0, and its P7, the minimap, done after it), on top of what the
 [ps2-shipping](PLANS/ps2-shipping.md) plan (0.22.0 to 0.24.0) left open. Each item comes from a phase's "Desviaciones";
 the plans have the detail, and [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) has the measurements.
 ShooterGame runs at 30 fps in PCSX2 (Budgets.md, the row "0.25.0"), so nothing here blocks the frame rate.
 
 ## Next features
-
-- **Minimap** (ps2-polish P7, not done). The radar still shows dots on a black square. It needs the map's real overview
-  image, like CS's overviews: a top-down render of the map, generated at cook time and paletted, drawn under the dots
-  and rotated with the view. An uncompiled draft (a `BuildOverview` commandlet, the scene capture, the radar and its
-  tests) is on the branch `wip/ps2-polish-p7-minimap`, under `Docs/PLANS/ps2-polish-p7-draft/`; it predates P8's
-  `AWorldSettings` and renderer changes, and it leaves open whether LeonCook should link Renderer and GSReference or
-  the overview should be a separate tool.
 
 - **Death and spectator camera.** On death the view does not jump straight to a teammate: for about 3 seconds a
   third-person camera orbits the player's body (CS's death cam), then it moves to a live teammate. Spectating a
@@ -23,7 +16,7 @@ ShooterGame stays single player against bots: no split screen (decided 2026-09-3
 
 ## Engine
 
-Proposed 2026-10-01, in priority order after the minimap; some expand items of the sections below.
+Proposed 2026-10-01, in priority order; some expand items of the sections below.
 - **The engine knows nothing of the game.** The one leak: `MemoryCardSaveGameSystem.cpp` draws the memory card icon with
   ShooterGame's green crosshair. The icon should be a project setting or asset (the project's save icon), not engine
   code. The other mentions of ShooterGame in `Engine/Source` are comments and tests.

@@ -20,7 +20,7 @@ Also: [ASSET_FORMATS.md](ASSET_FORMATS.md#maps--lmap) (what a map package saves)
 | --- | --- | --- |
 | `UWorld` | `Classes/Engine/World.h` | The map's asset: its persistent level, the physics scene and the navigation system; `FindWorldInPackage`, `InitWorld`, `UpdateWorldComponents`, `InitializeActorsForPlay`; an imported map's editor-only `AssetImportData` |
 | `ULevel` | `Classes/Engine/Level.h` | The world's persistent level (`UWorld::PersistentLevel`): `Actors` in spawn order, the world settings first; `PostLoad` reconnects it to its world |
-| `AWorldSettings` | `Classes/GameFramework/WorldSettings.h` | The level's settings actor: `DefaultGameMode` (plan decision D18), `KillZ` |
+| `AWorldSettings` | `Classes/GameFramework/WorldSettings.h` | The level's settings actor: `DefaultGameMode` (plan decision D18), `KillZ`, the bake's, fog's and sky's settings, the overview (`OverviewSettings`, [below](#the-overview)) |
 | `AStaticMeshActor` | `Classes/Engine/StaticMeshActor.h` | A placed mesh: its `UStaticMeshComponent` root (mesh, override materials, mobility, collision) |
 | `APlayerStart` | `Classes/GameFramework/PlayerStart.h` | Where players spawn; `PlayerStartTag` carries the game's meaning (`CT`, `T`) |
 | `ATargetPoint` | `Classes/Engine/TargetPoint.h` | A named point: a transform and `Tags` |
@@ -265,6 +265,29 @@ and no Z written, so everything draws over it ([ARCHITECTURE.md](ARCHITECTURE.md
 one the background is the renderer's clear colour. **The fog** takes the sky's horizon colour
 (`UTextureCube::HorizonColor`) while `FogSettings.bInscatteringColorFromSky` is on (the default), so the distance fades
 into the sky; `FogInscatteringColor` otherwise, or without a sky.
+
+### The overview
+
+A project whose Editor config sets `bBuildOverview=True` in `[/Script/LeonEd.MapImportSettings]` (ShooterGame's
+`DefaultEditor.ini`) gets each map's overview, the radar's picture in the style of CS 1.6's overviews
+([ps2-polish](PLANS/ps2-polish.md) P7), as the import's last step, after the bake: `<Map>/T_<Map>_Overview`
+(`/Game/Maps/de_leon/T_de_leon_Overview`), and the map's `AWorldSettings::OverviewSettings` names it with the square it
+shows (`Center`, `Size`). The engine's maps and those in `MapsWithoutOverview` (the main menu's) get none.
+
+- **What it shows**: the map from above in orthographic, north (+X) up and east (+Y) right, its Static, visible meshes
+  as the game draws them (their baked lighting and textures) without the sky or the fog, cut at `OverviewClipHeight`
+  (250 cm: roofs, a tunnel's ceiling and the walls' tops are not drawn, so the floors under them show). A point 1 m
+  above the ground that stands inside something (a wall, a house, a container, a crate) is drawn as an obstacle, dark
+  grey; nothing below the cut is the outside, darker; the floors keep their colours, greyer and with their shadows
+  softened, and a dark line runs along every obstacle and every step of more than 40 cm.
+- **Its square**: the map's visibility cells (where the players go, not the scenery around: de_harbor's water and ship
+  stay out) plus 2 m on each side, or without cells the Static meshes' bounds; de_leon 64 m, de_harbor 68 m.
+- **The texture**: 128 x 128 (`OverviewResolution`), PSMT8, one level: 17 KB of VRAM, about 50 cm a texel, the radar's
+  own scale (88 pixels for 50 m). Rendered at 512 x 512 on GSReference's software GS and averaged down
+  ([ARCHITECTURE.md](ARCHITECTURE.md#12-rendering-the-gs-path)), it is the same bytes on every machine and every
+  import: the reimport (gate G5) covers it.
+- **Its use**: `FWorldOverviewSettings::GetUV(Location)` gives a world point's place on it (U west to east, V north to
+  south); ShooterGame's radar draws the part around the view, turned with it, under its dots.
 
 ### Reimport
 

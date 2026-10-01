@@ -18,6 +18,7 @@
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "GameFramework/GameModeBase.h"
+#include "GameFramework/WorldSettings.h"
 #include "Misc/App.h"
 #include "ShooterBomb.h"
 #include "ShooterCharacter.h"
@@ -206,6 +207,50 @@ namespace
 		const float DeltaY = Location.Y - Origin.Y;
 		OutAhead = (DeltaX * Cos) + (DeltaY * Sin);
 		OutRight = (DeltaY * Cos) - (DeltaX * Sin);
+	}
+
+	/** A corner of the radar's overview polygon: where it is on the screen and on the overview. */
+	struct FRadarCorner
+	{
+		FVector2D Screen;
+		FVector2D UV;
+	};
+	using FRadarPolygon = TArray<FRadarCorner, TInlineAllocator<12>>;
+
+	/**
+	 * Clips Polygon to one side of the overview's UV square (Sutherland-Hodgman): Axis 0 is U, 1 is V; the kept side
+	 * is >= 0 when bKeepAbove, else <= 1. A crossing's screen position and UV move together, both affine in the other.
+	 */
+	void ClipRadarPolygon(FRadarPolygon& Polygon, int32 Axis, bool bKeepAbove, FRadarPolygon& Scratch)
+	{
+		Scratch.Reset();
+		const float Edge = bKeepAbove ? 0.0f : 1.0f;
+		auto Keeps = [Axis, bKeepAbove, Edge](const FRadarCorner& Corner)
+		{
+			const float Value = Axis == 0 ? Corner.UV.X : Corner.UV.Y;
+			return bKeepAbove ? Value >= Edge : Value <= Edge;
+		};
+		for (int32 Index = 0; Index < Polygon.Num(); ++Index)
+		{
+			const FRadarCorner& A = Polygon[Index];
+			const FRadarCorner& B = Polygon[(Index + 1) % Polygon.Num()];
+			const bool bKeepA = Keeps(A);
+			if (bKeepA)
+			{
+				Scratch.Add(A);
+			}
+			if (bKeepA != Keeps(B))
+			{
+				const float ValueA = Axis == 0 ? A.UV.X : A.UV.Y;
+				const float ValueB = Axis == 0 ? B.UV.X : B.UV.Y;
+				const float Alpha = (Edge - ValueA) / (ValueB - ValueA);
+				FRadarCorner Crossing{A.Screen + ((B.Screen - A.Screen) * Alpha), A.UV + ((B.UV - A.UV) * Alpha)};
+				// Exactly on the edge (no sampling past the texture by a rounding).
+				(Axis == 0 ? Crossing.UV.X : Crossing.UV.Y) = Edge;
+				Scratch.Add(Crossing);
+			}
+		}
+		Polygon = Scratch;
 	}
 
 	/** The labels drawn every frame, made once (a frame's HUD allocates nothing). */
@@ -439,9 +484,55 @@ float AShooterHUD::GetDamageIndicatorAngle(const FVector& ViewLocation, float Vi
 	return FMath::UnwindDegrees(FMath::RadiansToDegrees(FMath::Atan2(Right, Ahead)));
 }
 
+int32 AShooterHUD::MakeRadarOverviewTriangles(const FWorldOverviewSettings& Overview, const FVector& Origin, float Yaw,
+	float Range, float Left, float Top, float Size, TArray<FCanvasUVTri, TInlineAllocator<8>>& OutTriangles)
+{
+	OutTriangles.Reset();
+	if (!Overview.IsValid() || Size <= 0.0f || Range <= 0.0f)
+	{
+		return 0;
+	}
+	// The square's corners clockwise from the top left, each at the world point it shows: ahead is up, the right right.
+	const float Half = Size * 0.5f;
+	const float CmPerPixel = Range / Half;
+	const float YawRadians = FMath::DegreesToRadians(Yaw);
+	const float Cos = FMath::Cos(YawRadians);
+	const float Sin = FMath::Sin(YawRadians);
+	FRadarPolygon Polygon;
+	for (const FVector2D& Offset :
+		{FVector2D(-Half, -Half), FVector2D(Half, -Half), FVector2D(Half, Half), FVector2D(-Half, Half)})
+	{
+		const float Ahead = -Offset.Y * CmPerPixel;
+		const float Right = Offset.X * CmPerPixel;
+		const FVector World(Origin.X + (Ahead * Cos) - (Right * Sin), Origin.Y + (Ahead * Sin) + (Right * Cos), 0.0f);
+		Polygon.Add({FVector2D(Left + Half + Offset.X, Top + Half + Offset.Y), Overview.GetUV(World)});
+	}
+	FRadarPolygon Scratch;
+	for (int32 Axis = 0; Axis < 2 && Polygon.Num() >= 3; ++Axis)
+	{
+		ClipRadarPolygon(Polygon, Axis, true, Scratch);
+		if (Polygon.Num() >= 3)
+		{
+			ClipRadarPolygon(Polygon, Axis, false, Scratch);
+		}
+	}
+	for (int32 Index = 1; Index + 1 < Polygon.Num(); ++Index)
+	{
+		FCanvasUVTri& Triangle = OutTriangles.AddDefaulted_GetRef();
+		Triangle.V0_Pos = Polygon[0].Screen;
+		Triangle.V0_UV = Polygon[0].UV;
+		Triangle.V1_Pos = Polygon[Index].Screen;
+		Triangle.V1_UV = Polygon[Index].UV;
+		Triangle.V2_Pos = Polygon[Index + 1].Screen;
+		Triangle.V2_UV = Polygon[Index + 1].UV;
+	}
+	return OutTriangles.Num();
+}
+
 void AShooterHUD::DrawRadar()
 {
 	NumRadarPrimitives = 0;
+	bRadarOverviewDrawn = false;
 	const UWorld* World = GetWorld();
 	const AShooterGameMode* GameMode = World != nullptr ? World->GetAuthGameMode<AShooterGameMode>() : nullptr;
 	const AShooterGameState* State = GetShooterGameState();
@@ -476,6 +567,19 @@ void AShooterHUD::DrawRadar()
 	// The frame, then the view's cone (90 degrees, ahead is up).
 	Canvas->DrawTile(EdgeMargin - 1.0f, EdgeMargin - 1.0f, RadarSize + 2.0f, RadarSize + 2.0f, RadarBorderColor);
 	Canvas->DrawTile(EdgeMargin, EdgeMargin, RadarSize, RadarSize, RadarBackgroundColor);
+	// The map's overview under everything else (ps2-polish P7), turned with the view.
+	if (const AWorldSettings* WorldSettings = World->GetWorldSettings())
+	{
+		TArray<FCanvasUVTri, TInlineAllocator<8>> Triangles;
+		if (MakeRadarOverviewTriangles(WorldSettings->OverviewSettings, Origin, Yaw, RadarRange, EdgeMargin, EdgeMargin,
+				RadarSize, Triangles) > 0)
+		{
+			FCanvasTriangleItem Overview(TArrayView<const FCanvasUVTri>(Triangles.GetData(), Triangles.Num()),
+				WorldSettings->OverviewSettings.Texture);
+			Canvas->DrawItem(Overview);
+			bRadarOverviewDrawn = true;
+		}
+	}
 	const float ConeArm = RadarConeLength * UE_INV_SQRT_2;
 	Canvas->DrawLine(CenterX, CenterY, CenterX - ConeArm, CenterY - ConeArm, RadarConeColor, 1.0f);
 	Canvas->DrawLine(CenterX, CenterY, CenterX + ConeArm, CenterY - ConeArm, RadarConeColor, 1.0f);

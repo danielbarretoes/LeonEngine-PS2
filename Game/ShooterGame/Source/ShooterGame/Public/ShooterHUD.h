@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Blueprint/UserWidget.h"
+#include "CanvasItem.h"
 #include "CanvasTypes.h"
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
@@ -9,6 +10,7 @@
 
 class AShooterCharacter;
 class AShooterGameState;
+struct FWorldOverviewSettings;
 class AShooterPlayerController;
 class UBorder;
 class UFont;
@@ -118,8 +120,10 @@ enum class EShooterHUDIcon : uint8
  * - the centre's messages (the warmup, the round's result, the match's end) and a bar while planting or defusing;
  * - the scoreboard while Tab is held: UShooterScoreboardWidget, a UMG widget the HUD owns;
  * - under the radar a compact frame readout ("30 fps  33.3 ms", the player's option bShowFrameStats, on by default);
- * - top left the radar (CS 1.6's): a square around the view's position that turns with its yaw (ahead is up), the
- *   living teammates as dots, for the terrorists the bomb's carrier (a bigger red dot) or the bomb on the floor or
+ * - top left the radar (CS 1.6's): a square around the view's position that turns with its yaw (ahead is up), over
+ *   the map's overview when it has one (its world settings' OverviewSettings, ps2-polish P7: the overview turned with
+ *   the view and clipped to the square and to the overview's own edges, as textured triangles), the living teammates
+ *   as dots, for the terrorists the bomb's carrier (a bigger red dot) or the bomb on the floor or
  *   planted, and the bomb sites' letters; what lies beyond RadarRange sits on the edge. The team is the player's, or
  *   (a bot match's spectator) the watched player's. At most about 20 filled rectangles, lines and letters a frame,
  *   into the frame's canvas (no allocation);
@@ -252,6 +256,20 @@ public:
 	 */
 	[[nodiscard]] static float GetDamageIndicatorAngle(
 		const FVector& ViewLocation, float ViewYaw, const FVector& Source);
+	/**
+	 * The radar's overview (ps2-polish P7): the triangles that draw the part of the map's overview a radar square
+	 * shows, the square at (Left, Top) Size pixels on a side, centred on Origin, turned with the view's Yaw (degrees),
+	 * Range cm from its centre to its edge. The square's corners take the overview's UVs (north up at yaw 0), and the
+	 * square is clipped where the overview ends (Sutherland-Hodgman against its UV square, then a fan). Returns the
+	 * triangles' count: 0 off the overview or without one, 2 inside it, at most 6.
+	 */
+	static int32 MakeRadarOverviewTriangles(const FWorldOverviewSettings& Overview, const FVector& Origin, float Yaw,
+		float Range, float Left, float Top, float Size, TArray<FCanvasUVTri, TInlineAllocator<8>>& OutTriangles);
+	/** Whether the last frame's radar drew the map's overview. */
+	[[nodiscard]] bool WasRadarOverviewDrawn() const
+	{
+		return bRadarOverviewDrawn;
+	}
 	/** The radar's rectangles, lines and letters drawn in the last frame. */
 	[[nodiscard]] int32 GetNumRadarPrimitives() const
 	{
@@ -439,6 +457,7 @@ private:
 	/** The bomb sites' letters on the radar (the game mode's sites, made once). */
 	TArray<FString> RadarSiteLabels;
 	int32 NumRadarPrimitives = 0;
+	bool bRadarOverviewDrawn = false;
 	int32 NumDamageIndicatorLines = 0;
 	float FlashOverlayAlpha = 0.0f;
 	/** The kill feed's lines, formatted when the game state's feed changes (its serial). */

@@ -1,8 +1,11 @@
 #include "Camera/CameraComponent.h"
+#include "CanvasItem.h"
+#include "CanvasTypes.h"
 #include "Components/StaticMeshComponent.h"
 #include "CoreMinimal.h"
 #include "DynamicRHI.h"
 #include "Engine/DirectionalLight.h"
+#include "Engine/Engine.h"
 #include "Engine/PointLight.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
@@ -22,6 +25,7 @@
 #include "Materials/Material.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/Paths.h"
+#include "PalettedTexture.h"
 #include "Primitives.h"
 #include "SceneView.h"
 #include "Tests/CanvasTestScene.h"
@@ -326,6 +330,141 @@ bool FGSEmulatorCanvasFrameTest::RunTest(const FString& Parameters)
 	const int32 NumDifferent = CountDifferentPixels(
 		TEXT("Canvas frame"), Emulated, Expected, FGSOpenGLEmulator::FrameWidth, SceneChannelTolerance);
 	TestTrue("The canvas frame within the tolerance", NumDifferent <= SceneMaxDifferentPixels);
+	Emulator.Shutdown();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSEmulatorRadarFrameTest, "System.Renderer.GSEmulator.RadarFrame",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::NonNullRHI | EAutomationTestFlags::SmokeFilter)
+
+bool FGSEmulatorRadarFrameTest::RunTest(const FString& Parameters)
+{
+	// ps2-polish P7: a game's radar as the canvas draws it: a dark square with its frame, a map's overview (a PSMT8
+	// 128 x 128 texture, as LeonEd makes them) turned inside it as UV triangles clipped to the texture's edge (an
+	// FCanvasTriangleItem), dots on top and a letter. The emulator draws what the reference draws from the same list,
+	// and the overview's texels land in the square, not outside it.
+	FScopedGLContext Context;
+	if (!Context.IsValid())
+	{
+		AddError("No OpenGL context (a display is needed; run LeonAutomationTests with -nodisplay to skip this test)");
+		return false;
+	}
+	FGSOpenGLEmulator Emulator;
+	if (!TestTrue("The emulator starts", Emulator.Initialize(FPaths::Combine(FPaths::EngineDir(), TEXT("Shaders")))))
+	{
+		return false;
+	}
+	// The overview: pale floors crossed by dark walls, paletted as LeonEd paletizes it (PF_P8, one level).
+	constexpr int32 Side = 128;
+	TArray<uint8> Rgba;
+	for (int32 Y = 0; Y < Side; ++Y)
+	{
+		for (int32 X = 0; X < Side; ++X)
+		{
+			const bool bWall = (X % 32) < 3 || (Y % 24) < 3;
+			Rgba.Add(bWall ? 30 : uint8(150 + ((X * 3) % 80)));
+			Rgba.Add(bWall ? 34 : uint8(130 + ((Y * 5) % 90)));
+			Rgba.Add(bWall ? 28 : uint8(100 + (((X + Y) * 7) % 60)));
+			Rgba.Add(255);
+		}
+	}
+	FPalettedTexture Paletted;
+	if (!TestTrue("Paletted", FPalettedTextureBuilder::Build(Rgba.GetData(), Side, Side, true, Paletted)) ||
+		!TestEqual("PSMT8", int32(Paletted.Format), int32(PF_P8)))
+	{
+		return false;
+	}
+	UTexture2D* Overview = NewObject<UTexture2D>();
+	if (!TestTrue("The overview's texels", Overview->SetPlatformData(Side, Side, PF_P8, Paletted.Data.GetData())))
+	{
+		return false;
+	}
+
+	// The radar: 96 pixels at (12, 12), the overview turned 30 degrees, 0.3 of it across, centred near its northern
+	// edge (V 0.1): the square's polygon clipped at V = 0 as the HUD clips it, then fanned.
+	FCanvas Canvas(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	Canvas.DrawTile(0.0f, 0.0f, 640.0f, 448.0f, FLinearColor(0.3f, 0.45f, 0.6f));
+	Canvas.DrawTile(11.0f, 11.0f, 98.0f, 98.0f, FLinearColor(0.45f, 0.45f, 0.45f));
+	Canvas.DrawTile(12.0f, 12.0f, 96.0f, 96.0f, FLinearColor(0.04f, 0.07f, 0.04f));
+	const float Cos = FMath::Cos(FMath::DegreesToRadians(30.0f));
+	const float Sin = FMath::Sin(FMath::DegreesToRadians(30.0f));
+	auto UVOf = [Cos, Sin](const FVector2D& Screen)
+	{
+		const float Dx = (Screen.X - 60.0f) / 96.0f * 0.3f;
+		const float Dy = (Screen.Y - 60.0f) / 96.0f * 0.3f;
+		return FVector2D(0.5f + (Dx * Cos) - (Dy * Sin), 0.1f + (Dx * Sin) + (Dy * Cos));
+	};
+	const FVector2D Corners[] = {
+		FVector2D(12.0f, 12.0f), FVector2D(108.0f, 12.0f), FVector2D(108.0f, 108.0f), FVector2D(12.0f, 108.0f)};
+	TArray<FVector2D> Kept;
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		const FVector2D& A = Corners[Index];
+		const FVector2D& B = Corners[(Index + 1) % 4];
+		const float VA = UVOf(A).Y;
+		const float VB = UVOf(B).Y;
+		if (VA >= 0.0f)
+		{
+			Kept.Add(A);
+		}
+		if ((VA >= 0.0f) != (VB >= 0.0f))
+		{
+			Kept.Add(A + ((B - A) * (-VA / (VB - VA))));
+		}
+	}
+	TArray<FCanvasUVTri> Triangles;
+	for (int32 Index = 1; Index + 1 < Kept.Num(); ++Index)
+	{
+		FCanvasUVTri& Triangle = Triangles.AddDefaulted_GetRef();
+		Triangle.V0_Pos = Kept[0];
+		Triangle.V1_Pos = Kept[Index];
+		Triangle.V2_Pos = Kept[Index + 1];
+		Triangle.V0_UV = UVOf(Kept[0]).ComponentMax(FVector2D(0.0f, 0.0f));
+		Triangle.V1_UV = UVOf(Kept[Index]).ComponentMax(FVector2D(0.0f, 0.0f));
+		Triangle.V2_UV = UVOf(Kept[Index + 1]).ComponentMax(FVector2D(0.0f, 0.0f));
+	}
+	TestTrue("Clipped: more than a quad's two triangles", Triangles.Num() > 2);
+	FCanvasTriangleItem Map(TArrayView<const FCanvasUVTri>(Triangles.GetData(), Triangles.Num()), Overview);
+	Canvas.DrawItem(Map);
+	Canvas.DrawTile(40.0f, 70.0f, 4.0f, 4.0f, FLinearColor(0.43f, 0.63f, 1.0f));
+	Canvas.DrawTile(80.0f, 30.0f, 5.0f, 5.0f, FLinearColor(1.0f, 0.25f, 0.2f));
+	Canvas.DrawTile(58.5f, 58.5f, 3.0f, 3.0f, FLinearColor::White);
+	Canvas.DrawLine(60.0f, 60.0f, 51.5f, 51.5f, FLinearColor(0.3f, 0.45f, 0.3f), 1.0f);
+	Canvas.DrawText(UEngine::GetSmallFont(), TEXT("A"), 90.0f, 80.0f, FLinearColor(0.85f, 0.85f, 0.85f));
+
+	const FGSDrawEnvironment Environment = FGSOpenGLEmulator::GetDrawEnvironment();
+	uint32 ArenaFirstBlock = 0;
+	uint32 ArenaBlocks = 0;
+	FGSOpenGLEmulator::GetTextureArena(ArenaFirstBlock, ArenaBlocks);
+	FGSSceneRenderer Renderer;
+	Renderer.GetTextureCache().SetArena(ArenaFirstBlock, ArenaBlocks);
+	Renderer.GetTextureCache().SetTextureConverter(&ConvertTextureAsPS2Cook);
+	Renderer.GetTextureCache().BeginFrame();
+	FGSCommandList List;
+	Environment.Append(List);
+	Renderer.DrawCanvas(Canvas, Environment, List);
+
+	Emulator.Execute(List);
+	const TArray<FColor> Emulated = Emulator.ReadFrame(FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	FGSReferenceRasterizer Reference;
+	Reference.Execute(List);
+	const TArray<FColor> Expected =
+		Reference.ReadFrame(Environment.Frame, FGSOpenGLEmulator::FrameWidth, FGSOpenGLEmulator::FrameHeight);
+	const int32 NumDifferent = CountDifferentPixels(
+		TEXT("Radar frame"), Emulated, Expected, FGSOpenGLEmulator::FrameWidth, SceneChannelTolerance);
+	TestTrue("The radar frame within the tolerance", NumDifferent <= SceneMaxDifferentPixels);
+	// The overview's pale floors inside the square (not only its dark background), and outside it the backdrop.
+	int32 Floors = 0;
+	for (int32 Y = 14; Y < 106; ++Y)
+	{
+		for (int32 X = 14; X < 106; ++X)
+		{
+			Floors += Expected[(Y * FGSOpenGLEmulator::FrameWidth) + X].R > 90 ? 1 : 0;
+		}
+	}
+	TestTrue(*FString::Printf("The overview shows in the square (%d floor pixels)", Floors), Floors > 1000);
+	const FColor& Outside = Expected[(200 * FGSOpenGLEmulator::FrameWidth) + 300];
+	TestTrue("Nothing of it outside", Outside.B > Outside.R);
 	Emulator.Shutdown();
 	return true;
 }

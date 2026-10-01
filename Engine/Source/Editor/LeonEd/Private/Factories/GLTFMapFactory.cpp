@@ -10,6 +10,7 @@
 #include "Engine/PointLight.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/Texture2D.h"
 #include "Engine/VisibilityCellVolume.h"
 #include "Engine/VisibilityPortal.h"
 #include "Engine/World.h"
@@ -21,6 +22,7 @@
 #include "GltfScene.h"
 #include "LeonEdLog.h"
 #include "Level/Light.h"
+#include "MapOverview.h"
 #include "Misc/PackageName.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "Serialization/JsonReader.h"
@@ -820,6 +822,24 @@ UObject* UGLTFMapFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, 
 
 	// 7. The static lighting, baked into the static meshes (N22): the same map bakes the same bytes.
 	(void)FStaticLightingSystem::Build(*World);
+
+	// 8. The overview for a radar (Docs/PLANS/ps2-polish.md P7), rendered from the baked map: the same map renders the
+	// same bytes. Its texture is saved with the map's other packages.
+	if (UMapImportSettings::BuildsOverview(MapPackageName))
+	{
+		const FString OverviewPackageName = FMapOverview::GetOverviewPackageName(*World);
+		UTexture2D* Overview = CreateOrOverwriteAsset<UTexture2D>(FindOrLoadPackage(OverviewPackageName),
+			FName(*FPackageName::GetShortName(OverviewPackageName)), RF_Public | RF_Standalone);
+		FMapOverviewSettings OverviewSettings;
+		OverviewSettings.Resolution = Settings.OverviewResolution;
+		OverviewSettings.ClipHeight = Settings.OverviewClipHeight;
+		if (Overview == nullptr || !FMapOverview::Build(*World, OverviewSettings, *Overview))
+		{
+			UE_LOG(LogLeonEd, Error, "GLTFMapFactory: the overview of %s failed", *World->GetPathName());
+			return nullptr;
+		}
+		AdditionalImportedObjects.AddUnique(Overview);
+	}
 
 	UpdateAssetImportData(World, Filename);
 	UE_LOG(LogLeonEd, Log, "GLTFMapFactory: %s from '%s': %d actors, %d meshes", *World->GetPathName(), *Filename,

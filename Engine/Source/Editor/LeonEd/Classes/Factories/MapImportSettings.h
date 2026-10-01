@@ -75,6 +75,10 @@ struct LEONED_API FMapImportNodeRule
  * - With bAutoLinkWaypoints the import links the map's waypoints the way the project's agent (the Engine config's
  *   [/Script/Engine.NavigationSystem], FWaypointLinkParams::FromConfig) can walk (UNavigationSystem::AutoLinkWaypoints:
  *   a capsule sweep, steps, jumps, drops), besides the links the nodes name; the links are saved in the map.
+ * - With bBuildOverview the import renders the map's overview for a radar (FMapOverview, Docs/PLANS/ps2-polish.md
+ *   P7) once its lighting is baked: `<Map>/T_<Map>_Overview`, OverviewResolution texels square, cut at
+ *   OverviewClipHeight, kept in the world settings' OverviewSettings; not for the engine's maps nor the ones listed in
+ *   MapsWithoutOverview.
  */
 UCLASS(Config = Editor)
 class LEONED_API UMapImportSettings : public UObject
@@ -100,6 +104,22 @@ public:
 	UPROPERTY(Config)
 	bool bAutoLinkWaypoints = false;
 
+	/** Renders each map's overview at the import (see the class comment); off in the engine's config. */
+	UPROPERTY(Config)
+	bool bBuildOverview = false;
+
+	/** The overview's side, texels (FMapOverviewSettings::Resolution). */
+	UPROPERTY(Config)
+	int32 OverviewResolution = 128;
+
+	/** The height the overview cuts the map at, cm (FMapOverviewSettings::ClipHeight). */
+	UPROPERTY(Config)
+	float OverviewClipHeight = 250.0f;
+
+	/** The project's maps (long package names) that get no overview: not played on (a main menu's map). */
+	UPROPERTY(Config)
+	TArray<FString> MapsWithoutOverview;
+
 	/** The rule of a node name: the longest matching Prefix (the first of equal ones), or null. */
 	[[nodiscard]] const FMapImportNodeRule* FindRule(const FString& NodeName) const;
 
@@ -111,4 +131,10 @@ public:
 
 	/** Whether RequiredTags apply to the map of a package: every map but the engine's (/Engine/...) and the exempt. */
 	[[nodiscard]] static bool AppliesRequiredTags(const FString& MapPackageName);
+
+	/**
+	 * Whether the import renders the overview of the map of a package: with bBuildOverview, for every map but the
+	 * engine's (/Engine/...: a project's settings do not change the engine's content) and those in MapsWithoutOverview.
+	 */
+	[[nodiscard]] static bool BuildsOverview(const FString& MapPackageName);
 };

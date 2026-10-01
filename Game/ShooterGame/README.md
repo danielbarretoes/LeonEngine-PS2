@@ -591,13 +591,17 @@ and `.RoundInfo`, `.TextCache` updated.
   view at the centre with its cone, ahead up (it turns with the view's yaw); the living teammates as dots in the team's
   colour; for the terrorists the bomb's carrier as a bigger red dot, or the bomb on the floor or planted; the bomb
   sites' letters. What lies beyond the range sits on the edge in its direction (`AShooterHUD::ProjectToRadar`). A
-  spectator without a team (a bot match's) sees the watched player's team. It is filled rectangles, lines and letters
-  of the canvas: about 10 in a 5v5 (20 at most), in the frame's memory, nothing allocated; the scoreboard hides it.
+  spectator without a team (a bot match's) sees the watched player's team. Under the dots the map's overview
+  (ps2-polish P7, [LEVELS.md](../../Docs/LEVELS.md#the-overview)): the part of the map the square shows, turned with the
+  view, its floors light, its walls and obstacles dark grey, the outside darker (`AShooterHUD::MakeRadarOverviewTriangles`:
+  the square's corners on the overview, clipped where it ends, at most six textured triangles); a map without one keeps
+  the dark square. It is filled rectangles, lines and letters of the canvas: about 10 in a 5v5 (20 at most), in the
+  frame's memory, nothing allocated; the scoreboard hides it.
 - **The damage direction indicator**: when the player is hurt, an arc of four thick lines 64 px around the centre
   toward the damage's source (ahead is up, the right to the right: `GetDamageIndicatorAngle`), 50 degrees wide, that
   narrows and darkens and is gone after `DamageIndicatorDuration` (1 s).
 
-Tests: `ShooterGame.HUD.Radar` (the projection ahead, behind, turned, beyond the range; a 5v5 frame's 10 primitives; a
+Tests: `ShooterGame.HUD.RadarOverview` (the overview's triangles and their UVs, turned, clipped; drawn under the dots), `ShooterGame.HUD.Radar` (the projection ahead, behind, turned, beyond the range; a 5v5 frame's 10 primitives; a
 second frame allocates nothing) and `ShooterGame.HUD.DamageIndicator` (the angle ahead, right, left, behind, turned; a
 shot from the right draws the arc toward 90 degrees, gone a second later).
 

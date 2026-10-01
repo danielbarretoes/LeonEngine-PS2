@@ -41,6 +41,7 @@ the tables below:
 | 0.24.0 from the disc (pak in open order) | the real art | 29.96 | 33.5 / 33.5 / 34.3 ms | 5.3 ms | 10.3 ms | 25.7 KB | 4 256 KB | N24b's disc row |
 | **0.25.0** ([ps2-polish](../../../../Docs/PLANS/ps2-polish.md), from the main menu) | the real art, the sky | 29.62 | 33.5 / 33.5 / 33.5 ms | 4.1 ms | 6.6 ms | 11.0 KB | 4 794 KB | ps2-polish P8b |
 | de_harbor (the second map, `MeasurePS2 -Map /Game/Maps/de_harbor`) | its own art and sky | 29.92 | 33.5 / 33.5 / 34.0 ms | 5.4 ms | 6.9 ms | 9.5 KB | 5 176 KB | another map: by part only |
+| ps2-polish P7 (the minimap: the radar over the map's overview, from the main menu) | the real art, the sky | 29.62 | 33.5 / 33.5 / 33.5 ms | 4.1 ms | 6.6 ms | 11.0 KB | 4 828 KB | 0.25.0 |
 
 Which rows compare: before N18 the game stepped by each frame's time, so every row (N1 to N20, N13, N17, N19) plays
 another match and compares only by part (the world's, the scene's, the audio's milliseconds). From N18 on a build that
@@ -424,6 +425,18 @@ order for de_harbor; de_leon's ordered pak takes 2.93 s).
 | Build | fps | avg | p50 / p95 / p99 | worst | world | scene | HUD + canvas | audio | present (vblank wait) | tris | GIF / frame | GMalloc peak | heap at exit | allocs / frame | UObjects peak | PCSX2, Measure.ini |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
 | de_harbor | 29.92 | 33.42 ms | 33.50 / 33.50 / 34.00 ms | 103.25 ms | 5.38 ms | 6.94 ms | 0.20 + 2.35 ms | 0.18 ms | 19.13 ms (16.92) | 8600 | 9.5 KB | 5176 KB | 4950 KB | 13.5 | 2067 | 2.8.2.0, d29e64bc |
+
+**ps2-polish P7** (the minimap, after de_harbor: the radar draws the map's overview, a 128 x 128 PSMT8 texture of one
+level, as up to six textured triangles under its dots). `MeasurePS2 -Label minimap` on de_leon: every frame after the
+first (the travel from the main menu, 1 140 ms) on the second field, p50 / p95 / p99 33.5 ms, 29.62 fps as 0.25.0; HUD
+and canvas 0.20 + 2.27 ms (0.19 + 2.24 at 0.25.0), the scene 6.60 ms. The overview costs 17 KB of the GS texture arena
+(the VRAM report: de_leon 207 KB of its own, 515 KB with the common ones; de_harbor 256 KB and 564 KB; of 1 856 KB),
+stays resident (`tex_uploads` 0.01 a frame) and adds 17 KB to the map's load: LoadMapMisc's peak is 710 KB of 1 024 as
+before, GMalloc's 4 828 KB (4 794 KB at 0.25.0).
+
+| Build | fps | avg | p50 / p95 / p99 | worst | world | scene | HUD + canvas | audio | present (vblank wait) | tris | GIF / frame | GMalloc peak | heap at exit | allocs / frame | UObjects peak | PCSX2, Measure.ini |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| minimap | 29.62 | 33.76 ms | 33.50 / 33.50 / 33.50 ms | 1140.15 ms | 4.07 ms | 6.60 ms | 0.20 + 2.27 ms | 0.11 ms | 20.68 ms (18.72) | 7987 | 11.0 KB | 4828 KB | 4594 KB | 73.8 | 1928 | 2.8.2.0, d29e64bc |
 
 **0.25.0** ([ps2-polish](../../../../Docs/PLANS/ps2-polish.md) P10). Every frame after the first falls on the second
 field (p50 / p95 / p99 33.5 ms); the average (29.62 fps) is below 30 only by the first frame, which since P9 holds the

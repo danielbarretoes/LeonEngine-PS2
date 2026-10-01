@@ -29,6 +29,17 @@ bool UMapImportSettings::AppliesRequiredTags(const FString& MapPackageName)
 		[&MapPackageName](const FString& Exempt) { return Exempt.Equals(MapPackageName, ESearchCase::IgnoreCase); });
 }
 
+bool UMapImportSettings::BuildsOverview(const FString& MapPackageName)
+{
+	const UMapImportSettings* Settings = GetDefault<UMapImportSettings>();
+	if (!Settings->bBuildOverview || MapPackageName.StartsWith(TEXT("/Engine/"), ESearchCase::IgnoreCase))
+	{
+		return false;
+	}
+	return !Settings->MapsWithoutOverview.ContainsByPredicate(
+		[&MapPackageName](const FString& Exempt) { return Exempt.Equals(MapPackageName, ESearchCase::IgnoreCase); });
+}
+
 FString UMapImportSettings::GetSuffix(const FString& NodeName, const FString& Prefix)
 {
 	FString Suffix = NodeName.StartsWith(Prefix, ESearchCase::IgnoreCase) ? NodeName.Mid(Prefix.Len()) : NodeName;

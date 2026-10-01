@@ -9,7 +9,7 @@ What runs automatically and what a person still has to check by hand. Build and 
 | --- | --- | --- |
 | Every local gate ([ps2-shipping](PLANS/ps2-shipping.md) N1; the repository has no CI) | `Engine\Build\BatchFiles\RunGates.bat [-PS2] [-Measure]` | `RunGates OK`: Lint (G1, G4, /W4), RunTests, CheckReimport (G5, the engine and ShooterGame content), SmokeTest (G6), BotMatch (`10 7`, played twice), BotMatchDeHarbor (the same on de_harbor) and ValidateAssets (engine and ShooterGame) each print `[ OK ]` (logs in `Engine\Saved\Gates\`); `-PS2` adds `Package.bat -NoWin64` (G3), `-Measure` `MeasurePS2.bat` (below) |
 | The PS2 frame in PCSX2 ([ps2-shipping](PLANS/ps2-shipping.md) N1, N9) | `Engine\Build\BatchFiles\MeasurePS2.bat [-Project Game\ShooterGame] [-Rounds 2] [-Seed 7] [-Seconds 120] [-Map <map>] [-NoBuild] [-TimeoutSeconds 900] [-Label <text>] [-Iso] [-PakOrder <order file>] [-LogFileOpenOrder] [-ExtraArgs <game arguments>]` (Docker and PCSX2, unattended; `-ExtraArgs -novu1` measures the EE's C++ emitter; the disc switches are [below](#ps2-disc-boot)) | `MeasurePS2 OK`: PCSX2 runs the staged ShooterGame without its window, from `Game\ShooterGame\Saved\PCSX2` (the user's `PCSX2.ini` with `Engine\Platforms\PS2\Build\PCSX2\Measure.ini` on top), a bot match watched through a bot's eyes (`-BotMatchSpectate -LogFrameTimes -ExitAfterSeconds`) until the game's `FrameStats Summary:` and `ProfileSummary:` lines (the cycle stats' top level scopes, N9); the figures go to `Saved\Profiling\PS2Frame.csv` (the `ProfileSummary:` pairs as `Profile_<key>` columns), and a [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) row and the last `Profile over N frames (ms, calls):` block (the frame's scopes as a hierarchy) are printed. Three runs agree within 3 % |
-| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`, 575 at 0.24.0, 588 at [ps2-polish](PLANS/ps2-polish.md) P5, 589 at P3, 595 at P8, 597 at P9, 603 at P5b on P9, 605 at 0.25.0; `-nodisplay` skips the `NonNullRHI` tests, which need an OpenGL window) and ShooterGame's (`ShooterGameTests`, 112 at P3b, 118 at P9, 125 at 0.25.0, 129 with de_harbor), between them `LeonHeaderTool -Test: 35 of 35 golden cases passed`, then `TestPAL: PASSED (171 test(s), 0 failed)` (TestPAL on Win64) |
+| Automation tests (Win64) | `Engine\Build\BatchFiles\RunTests.bat [-automation=<filter>]` | `Automation: N test(s), N passed, 0 failed` twice, the engine's (`LeonAutomationTests`, 575 at 0.24.0, 588 at [ps2-polish](PLANS/ps2-polish.md) P5, 589 at P3, 595 at P8, 597 at P9, 603 at P5b on P9, 605 at 0.25.0, 607 with the minimap; `-nodisplay` skips the `NonNullRHI` tests, which need an OpenGL window) and ShooterGame's (`ShooterGameTests`, 112 at P3b, 118 at P9, 125 at 0.25.0, 129 with de_harbor, 130 with the minimap), between them `LeonHeaderTool -Test: 35 of 35 golden cases passed`, then `TestPAL: PASSED (171 test(s), 0 failed)` (TestPAL on Win64) |
 | GS emulator conformance ([ps2-gs-parity](PLANS/ps2-gs-parity.md) P4, [ps2-engine](PLANS/ps2-engine.md) E2, [ps2-shipping](PLANS/ps2-shipping.md) N8) | `LeonAutomationTests -automation=GSEmulator` (it needs an OpenGL window) | `System.Renderer.GSEmulator.Conformance`: the OpenGL GS emulator draws the 21 GS conformance scenes within 2 levels per channel of the reference rasterizer, but for at most 8 pixels a scene (today 3 in StripsAndSprites, pixel centres on a shallow side, and 3 in MipmapLod, a minified bilinear weight); `System.Renderer.GSEmulator.SceneFrame`: a frame of the GS scene renderer (textured, flat and translucent meshes, two lights, a floor through the near plane; the texture as the PS2 cook makes it, PSMT8 with its mips, trilinear, since ps2-shipping N13) within one 5-bit step of the reference, but for at most 64 pixels |
 | LeonHeaderTool golden tests (run by `RunTests.bat` too) | `Engine\Intermediate\Build\HostTools\Win64\LeonHeaderTool.exe -Test` | `LeonHeaderTool -Test: 35 of 35 golden cases passed` |
 | Core, CoreUObject, Json, Projects and PakFile on PS2 | `Engine\Platforms\PS2\Build\BatchFiles\RunPCSX2.ps1 -Program TestPAL -Build` | `TestPAL: PASSED (N test(s), 0 failed)` in the EE log: 157 at [ps2-shipping](PLANS/ps2-shipping.md) N15, against 164 on Win64 then (the platform-file, config-cache, log-file, SaveConfig and package-file tests are desktop-only); not run again on the EE since N24's tests (171 on Win64 at 0.24.0). N15's `System.Core.Math.VectorMathVU0` compares VU0 with the scalar reference there: at most 2 units in the last place of the products' magnitudes |
@@ -109,7 +109,10 @@ data in a cooked package, its platform recorded, an unknown platform refused). `
 (`Engine/Source/Developer/MeshUtilities/Private/Tests/Fixtures/`, written by `MakeMapFixture.py` next to it: a node of
 every naming convention, lights, a textured material, waypoint extras) with a project's rules, check every actor, mesh,
 collision box, material and light, that importing over the map and `-reimport` save the same bytes, and that a
-missing required tag fails the import.
+missing required tag fails the import. `System.LeonEd.MapOverview.RenderAndProject` ([ps2-polish](PLANS/ps2-polish.md)
+P7) renders the overview of a test world (a floor, a low red block, a tall tower, a roof over the floor): its square,
+the world-to-overview projection (north-west the top left), the block red where it projects, the margin dark, the
+tower an obstacle's grey, the floor under the roof, 128 x 128 PSMT8 in one level, and the same bytes twice.
 
 Since P16 the cook and the paks are tested too. `System.PakFile.*` (5, in `LeonAutomationTests` and in TestPAL on every
 platform, the PS2 included) build paks in memory with `FPakWriter`: the round trip (every entry's bytes, an empty file,
@@ -141,7 +144,7 @@ ShooterGame's tests (`ShooterGame.*`, 129 now, in `ShooterGameTests.exe` with th
 team choice, ten bots on ten team starts and a sixth refused, a pawn standing on its start, `bot_fill`, the character's
 CS movement (UE's model, the run and walk speeds, crouching, the capsule, the first-person camera), the crosshair the
 HUD draws, the project's input and channel config, and the map: `ShooterGame.Map.DeLeonHoldsTheGame` loads
-`/Game/Maps/de_leon` and checks its sites, buy zones, team starts, waypoint links, player clip, ladders and sun; `RequiredTags`
+`/Game/Maps/de_leon` and checks its sites, buy zones, team starts, waypoint links, player clip, ladders and sun (and since ps2-polish P7 its overview: 128 x 128 PSMT8, every start and waypoint on it); `RequiredTags`
 imports `de_leon.glb` under the project's rules and refuses the AxisTest source; `TenPawnsOnDeLeon` opens the map in a
 headless `UGameEngine` with `?team=CT` (the nine bots join around the player) and ticks 60 frames: ten pawns standing
 on distinct starts, on the ground. The menus ([ps2-polish](PLANS/ps2-polish.md) P9, `ShooterGame.Menu.*`):
@@ -171,7 +174,10 @@ each: `ShooterGame.Weapons.BestWeaponSkipsEmpty`, `ShooterGame.Bomb.ExplosionRad
 and `ShooterGame.Buy.BuyTimeAfterTheFreeze`. N30d's halftime, spectating and HUD have theirs:
 `ShooterGame.Rounds.HalftimeSwitchesSides` (the sides, the scores, the money, the spawns and the match checker at the
 halftime), `.MatchEndsAtTheMajority`, `ShooterGame.Spectate.DeathCamThenTeammates` (the death cam's aim and length,
-then a teammate, then the free look), `.CyclingSkipsTheDead` (the spectator's keys), `ShooterGame.HUD.Radar` (the
+then a teammate, then the free look), `.CyclingSkipsTheDead` (the spectator's keys), `ShooterGame.HUD.RadarOverview` (ps2-polish P7: the radar square's corners on the
+overview's UVs at yaw 0 and 90, clipped at the map's edge with every UV in the texture and every corner in the square,
+nothing off the map or without an overview, the HUD's frame drawing one run of the overview's triangles under the
+dots), `ShooterGame.HUD.Radar` (the
 projection, the primitives of a 5v5 frame, no allocation) and `.DamageIndicator` (the arc's direction and its end).
 [ps2-polish](PLANS/ps2-polish.md) P6's HUD (`ShooterHUDTests.cpp`): `ShooterGame.HUD.IconAtlas` (the atlas and the
 HUD's icon table agree), `.DisplayNames`, `.KillFeedIcons` (the icons drawn at their texels), `.Scoreboard` (the
@@ -369,6 +375,10 @@ with the engine's tests (a window is needed: `-nodisplay` skips it):
   engine fonts (Spanish, a shadow, an outline) and its textured, scaled and rotated tiles, emulated and referenced
   from the same list, within one 5-bit step but for 64 pixels; `System.Renderer.GS.Canvas.Text` draws it with the
   reference alone (the glyphs where their metrics put them, the frame's CRC as verified);
+- `System.Renderer.GSEmulator.RadarFrame` ([ps2-polish](PLANS/ps2-polish.md) P7): a radar as the canvas draws it, a
+  PSMT8 128 x 128 overview turned 30 degrees inside its square as UV triangles clipped at the texture's edge, dots and a
+  letter on top, emulated and referenced from the same list within one 5-bit step but for 64 pixels, the overview's
+  texels inside the square and none outside;
 - `System.Renderer.GSEmulator.SceneFrame`: a frame of the GS scene renderer (its texture PSMT8 with mips since N13),
   within one 5-bit step but for 64 pixels (20 today);
 - `System.Renderer.GS.*`: the scene renderer's lists drawn by the reference (the emitter, the texture cache with the
