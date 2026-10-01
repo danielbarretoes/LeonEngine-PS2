@@ -1,7 +1,7 @@
 # Leon Engine
 
 A C++ game engine that follows the **Unreal Engine 4.27** source layout, module architecture and Epic naming
-conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool). Version 0.25.0
+conventions, built with CMake through **LeonBuildTool** (our UnrealBuildTool). Version 0.26.0
 ([CHANGELOG.md](CHANGELOG.md)).
 
 - **Win64, the development and editor platform**: the engine modules (`Core`, `CoreUObject`, `Engine`, `Renderer`:
@@ -68,7 +68,7 @@ Engine\Build\BatchFiles\BotMatch.bat 10 7
 ```
 
 Measure the PS2 frame in PCSX2, unattended (a bot match watched through a bot's eyes; `-Iso` boots the disc):
-`Engine\Build\BatchFiles\MeasurePS2.bat [-Iso]`. At 0.25.0 ShooterGame on de_leon runs every frame after the
+`Engine\Build\BatchFiles\MeasurePS2.bat [-Iso]`. At 0.26.0 (as at 0.25.0) ShooterGame on de_leon runs every frame after the
 first at 33.5 ms (p50 / p95 / p99; 29.62 fps with the travel from the main menu); at 0.24.0 its first frame from the
 disc came 2.93 s after the engine starts
 ([Budgets.md](Engine/Platforms/PS2/Documentation/Budgets.md)).

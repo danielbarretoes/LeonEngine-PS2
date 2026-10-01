@@ -7,6 +7,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-01
+
+After 0.25.0: de_harbor, a second bomb defusal map; Counter-Strike 1.6's SAS and Leet Krew as the team bodies
+(Valve's models, accepted as the one exception to the CC0 rule: ShooterGame is an engine capability demo, not a
+product for sale or distribution); the real minimap (ps2-polish P7); matches of up to 20 players; everything named in
+English. The engine and ShooterGame content is resaved for 0.26.0. PCSX2 ([Budgets.md](Engine/Platforms/PS2/Documentation/Budgets.md),
+the row «0.26.0»): every frame after the first at 33.5 ms (p50 / p95 / p99), 29.62 fps with the first frame's travel
+from the main menu, the scene 6.8 ms. The ISO (8 519 680 bytes) boots in PCSX2 into the main menu. `BotMatch 10 7`:
+`Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides switched after round 5` on de_leon and de_harbor.
+
 ### Added
 
 - **Larger matches: up to 20 players** (Budgets.md, "Players"). A bot sweep in PCSX2 (`MeasurePS2 -ExtraArgs
@@ -70,7 +80,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 - **The team bodies are Counter-Strike 1.6's player models**: the SAS for the counter-terrorists (`SK_Body_CT`) and
   the Leet Krew for the terrorists (`SK_Body_T`), provided by the user (Valve's models, Sketchfab downloads; not CC0:
-  `SourceArt/LICENSES.md`, the decision to ship them is pending). `SourceArt/Characters/make_cs16_characters.py`
+  `SourceArt/LICENSES.md`; accepted by the user on 2026-10-01 as the one exception to the CC0-only rule, ShooterGame
+  being an engine capability demo, not a product for sale or distribution). `SourceArt/Characters/make_cs16_characters.py`
   (Blender through `leon_art`, deterministic, in `check_art_determinism.py`'s list) imports `CS16/<model>/*.fbx`,
   carries the models' own GoldSrc weights from their Valve biped (`Bip01 ...` and its helpers) over to `SKEL_Body`'s
   23 bones (at most two a vertex), turns and scales them onto `SKEL_Body`'s T pose (the limbs moved onto its bones, the

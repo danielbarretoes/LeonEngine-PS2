@@ -1,9 +1,9 @@
 # Pending
 
-What is left after [ps2-polish](PLANS/ps2-polish.md) (0.25.0, and its P7, the minimap, done after it), on top of what the
+What is left after [ps2-polish](PLANS/ps2-polish.md) (0.25.0, and its P7, the minimap, done after it and released in 0.26.0), on top of what the
 [ps2-shipping](PLANS/ps2-shipping.md) plan (0.22.0 to 0.24.0) left open. Each item comes from a phase's "Desviaciones";
 the plans have the detail, and [Budgets.md](../Engine/Platforms/PS2/Documentation/Budgets.md) has the measurements.
-ShooterGame runs at 30 fps in PCSX2 (Budgets.md, the row "0.25.0"), so nothing here blocks the frame rate.
+ShooterGame runs at 30 fps in PCSX2 (Budgets.md, the row "0.26.0"), so nothing here blocks the frame rate.
 
 ## Next features
 

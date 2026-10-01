@@ -20,7 +20,7 @@ out of memory.
 | A map's sounds (SPU2 RAM) | 2 028 KB (`MapSoundRamKB=0`) | the same (N19's check, now configurable) |
 | A mesh | 4 096 triangles, 64 bones | the same (`MaxMeshTriangles`, `MaxMeshBones`) |
 | A texture | 256 texels a side, 8 bits a texel (PSMT8 or PSMT4) | the same (`MaxTextureSize`, `MaxTextureBitsPerPixel`) |
-| The disc | a CD: 700 MB (ShooterGame's image: 8 464 384 bytes with de_harbor; 7 784 448 bytes at 0.25.0; 7 122 944 at 0.24.0; 5 056 512 at N23) | `BuildCookRun -iso` (N23) |
+| The disc | a CD: 700 MB (ShooterGame's image: 8 519 680 bytes at 0.26.0; 8 464 384 bytes with de_harbor; 7 784 448 bytes at 0.25.0; 7 122 944 at 0.24.0; 5 056 512 at N23) | `BuildCookRun -iso` (N23) |
 | A memory card save | the first: the folder (2 KB), `icon.sys` (1 KB), the icon (33 KB: a 128 x 128 16-bit texture) and the save (1 KB for ShooterGame's settings); then the save alone | `FMemoryCardSaveGameSystem` ([ps2-shipping](../../../../Docs/PLANS/ps2-shipping.md) N24): a card with less room fails the save (`NoSpace`) before it writes |
 | Memory tags | EngineMisc 2 048 (3 072 from N27 until N14b), UObject 2 048, LoadMapMisc 1 024, Textures 6 144, Meshes 4 096, Animation 2 048, Audio 4 096, Physics 512, AI 256, SceneRender 1 536, GameMisc 1 536, Temporary 256, RenderLists 4 096 (N14b) (KB) | the same section, per `ELLMTag` (`LLM_SCOPE`); the measured peaks are below |
 
@@ -42,6 +42,7 @@ the tables below:
 | **0.25.0** ([ps2-polish](../../../../Docs/PLANS/ps2-polish.md), from the main menu) | the real art, the sky | 29.62 | 33.5 / 33.5 / 33.5 ms | 4.1 ms | 6.6 ms | 11.0 KB | 4 794 KB | ps2-polish P8b |
 | de_harbor (the second map, `MeasurePS2 -Map /Game/Maps/de_harbor`) | its own art and sky | 29.92 | 33.5 / 33.5 / 34.0 ms | 5.4 ms | 6.9 ms | 9.5 KB | 5 176 KB | another map: by part only |
 | ps2-polish P7 (the minimap: the radar over the map's overview, from the main menu) | the real art, the sky | 29.62 | 33.5 / 33.5 / 33.5 ms | 4.1 ms | 6.6 ms | 11.0 KB | 4 828 KB | 0.25.0 |
+| **0.26.0** (de_harbor, CS 1.6's bodies, the minimap, up to 20 players; from the main menu) | the real art, the sky | 29.62 | 33.5 / 33.5 / 33.5 ms | 4.2 ms | 6.8 ms | 11.0 KB | 4 870 KB | 0.25.0, P7 |
 
 Which rows compare: before N18 the game stepped by each frame's time, so every row (N1 to N20, N13, N17, N19) plays
 another match and compares only by part (the world's, the scene's, the audio's milliseconds). From N18 on a build that
@@ -408,6 +409,7 @@ is not the hardware, so each row names its PCSX2 and the hash of the settings it
 | ps2-polish P8b, close up (the clipping on VU1) | 29.99 | 33.35 ms | 33.50 / 33.50 / 33.50 ms | 50.05 ms | 3.52 ms | 1.82 ms | 0.14 + 0.86 ms | 0.01 ms | 27.72 ms (27.46) | 979 (before VU1 culls) | 0.5 KB (the EE's) | 3 389 KB | 1 849 | 2.8.2.0, d29e64bc |
 | ps2-polish P8b (the clipping on VU1, two point lights a draw; on P3, the same match) | 29.97 | 33.37 ms | 33.50 / 33.50 / 33.50 ms | 50.05 ms | 4.60 ms | 5.70 ms | 0.17 + 1.40 ms | 0.18 ms | 21.97 ms (20.47) | 6 303 (before VU1 culls) | 8.6 KB (the EE's) | 4 309 KB | 1 853 | 2.8.2.0, d29e64bc |
 | **0.25.0** (ps2-polish P10: P6's HUD and scoreboard and P5b on P8, P9 and P8b; the first frame, 1 137 ms, holds the travel from the main menu to de_leon) | 29.62 | 33.76 ms | 33.50 / 33.50 / 33.50 ms | 1137.24 ms | 4.08 ms | 6.60 ms | 0.19 + 2.24 ms | 0.11 ms | 20.73 ms (18.77) | 7 986 (before VU1 culls) | 11.0 KB (the EE's) | 4 794 KB | 1 925 | 2.8.2.0, d29e64bc |
+| **0.26.0** (the release on de_harbor, the CS 1.6 bodies, the minimap and the 20-player cap; the default 5 v 5 match; the first frame, 1 132 ms, holds the travel from the main menu to de_leon) | 29.62 | 33.76 ms | 33.50 / 33.50 / 33.50 ms | 1131.99 ms | 4.16 ms | 6.83 ms | 0.21 + 2.27 ms | 0.11 ms | 20.37 ms (18.49) | 7 349 (before VU1 culls) | 11.0 KB (the EE's) | 4 870 KB | 1 972 | 2.8.2.0, d29e64bc |
 
 **de_harbor** (the second map, after 0.25.0; `MeasurePS2 -Map /Game/Maps/de_harbor`: its bot match of two rounds with
 seed 7 straight into the map, `-map=`, without the menu's travel). Every frame but two falls on the second field (p50 /

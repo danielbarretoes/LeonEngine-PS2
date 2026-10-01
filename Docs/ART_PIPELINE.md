@@ -245,8 +245,9 @@ floor slabs are dirt (the sand) and tile (the paving).
 
 ## Licenses: CC0 only
 
-Only CC0 (public domain) art enters ShooterGame, but for one exception awaiting a decision: the bodies are Counter-Strike
-1.6's player models (Valve's), provided by the user, and are not CC0 (LICENSES.md). Every source file has a row in
+Only CC0 (public domain) art enters ShooterGame, but for one exception: the bodies are Counter-Strike 1.6's player
+models (Valve's), provided by the user, and are not CC0 (LICENSES.md). The user accepted them on 2026-10-01 on the
+basis that ShooterGame is an engine capability demo, not a product for sale or distribution. Every source file has a row in
 `Game/ShooterGame/SourceArt/LICENSES.md` with its origin: made by a script of this repository, or a CC0 download
 (its URL and author; the downloaded file is committed in `SourceArt`, never fetched at build time). Art whose license
 is unclear stays out, whatever its quality (the removed ThirdPerson template's Mixamo animations, for example).

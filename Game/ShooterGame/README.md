@@ -1,14 +1,15 @@
 # ShooterGame (Win64 and PS2)
 
-An offline Counter-Strike 1.6 clone, modelled on UE's ShooterGame sample: two teams (CT and T), five players a side,
-on `de_leon`, a desert town, and `de_harbor`, an industrial port, both built in Blender, on Win64 and the PS2 (30 fps in
+An offline Counter-Strike 1.6 clone, modelled on UE's ShooterGame sample: two teams (CT and T), five players a side
+(up to ten a side from the main menu), on `de_leon`, a desert town, and `de_harbor`, an industrial port, both built in Blender, on Win64 and the PS2 (30 fps in
 PCSX2, from its pak or a bootable ISO).
-At 0.25.0 it has CS 1.6's movement (fall damage, ladders, the jump's stamina, tagging, footsteps by surface), its
+At 0.26.0 it has CS 1.6's movement (fall damage, ladders, the jump's stamina, tagging, footsteps by surface), its
 arsenal (knife, Glock, USP, Desert Eagle, MP5, AK-47, M4A1, AWP; HE, flashbang and smoke grenades) with the economy,
 ammunition, wall penetration and hit groups, the defusal rounds with the halftime side switch, the radar, the damage
 indicator, the death cam and spectating, bots that buy by the team's plan (eco, force-buy), throw grenades, strafe and
-use the radio, physical materials with per-surface sounds, and animated CT and T characters and first-person arms; all
-the art and sounds are made by scripts (CC0). The player's settings are saved (the memory card on the PS2), and the
+use the radio, physical materials with per-surface sounds, and animated CT and T characters (Counter-Strike 1.6's SAS and Leet Krew
+models, Valve's: the one exception to the CC0 rule, [LICENSES.md](SourceArt/LICENSES.md)) and first-person arms; the
+rest of the art and the sounds are made by scripts (CC0). The player's settings are saved (the memory card on the PS2), and the
 pad vibrates.
 
 History: P17 to P21 (0.20.0) boot it with CS movement, the first weapons, the defusal rules, the bots' brains and
@@ -22,8 +23,9 @@ with it, and N30a to N30f CS 1.6 parity: the arsenal and economy ([Weapons](#wea
 [The radio](#the-radio)) and the physical materials ([Surfaces and their sounds](#surfaces-and-their-sounds)).
 [ps2-polish](../../Docs/PLANS/ps2-polish.md) (0.25.0) fixes the vanishing characters and the bots' knife and idle
 walks, follows CS 1.6's accuracy and recoil, toggles the crouch, drops and picks up weapons, and adds the fonts and
-UMG widgets, CS 1.6's HUD and a table scoreboard, the desert sky, the main menu, team selection and the pause menu
-(the real minimap is still pending).
+UMG widgets, CS 1.6's HUD and a table scoreboard, the desert sky, the main menu, team selection and the pause menu.
+0.26.0 adds de_harbor, CS 1.6's SAS and Leet Krew as the team bodies, the real minimap (the map's overview under
+the radar) and matches of up to 20 players.
 
 ## Build and run
 
