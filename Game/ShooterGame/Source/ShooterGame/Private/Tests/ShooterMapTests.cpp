@@ -166,8 +166,9 @@ namespace
 		}
 		Test.TestEqual("Two bomb sites", FindActors<ATriggerVolume>(*World, FName(TEXT("BombSite"))).Num(), 2);
 		Test.TestEqual("Two buy zones", FindActors<ATriggerVolume>(*World, FName(TEXT("BuyZone"))).Num(), 2);
-		Test.TestEqual("Five CT starts", FindTeamStarts(*World, TEXT("CT")).Num(), 5);
-		Test.TestEqual("Five T starts", FindTeamStarts(*World, TEXT("T")).Num(), 5);
+		Test.TestEqual(
+			"Sixteen CT starts (CS's five, then the larger matches')", FindTeamStarts(*World, TEXT("CT")).Num(), 16);
+		Test.TestEqual("Sixteen T starts", FindTeamStarts(*World, TEXT("T")).Num(), 16);
 		for (const APlayerStart* Start : FindTeamStarts(*World, TEXT("CT")))
 		{
 			Test.TestEqual("A CT start faces south", FMath::Abs(Start->GetActorRotation().Yaw), 180.0f, 0.01f);
@@ -236,13 +237,15 @@ namespace
 	 * the ten pawns stand on ten different starts of their teams (the G6 smoke, in a test), on the floor slabs (N29),
 	 * each on its spawn's surface. Returns the world (the engine still running) for the map's own checks, or null.
 	 */
-	UWorld* PlaceTenPawns(FAutomationTestBase& Test, UGameEngine& Engine, const TCHAR* MapName,
-		EPhysicalSurface CTSpawnSurface, EPhysicalSurface TSpawnSurface, float CTSpawnMinX)
+	UWorld* PlacePawns(FAutomationTestBase& Test, UGameEngine& Engine, const TCHAR* MapName,
+		EPhysicalSurface CTSpawnSurface, EPhysicalSurface TSpawnSurface, float CTSpawnMinX, int32 NumBots = 9)
 	{
+		// The player and its bots, half a side (the menu's largest match, 19 bots: ten a side, Budgets.md "Players").
+		const int32 PerTeam = (NumBots + 1) / 2;
 		Engine.Init(nullptr);
 		FWorldContext& Context = *Engine.GameInstance->GetWorldContext();
 		FString Error;
-		const FString URL = FString(MapName) + TEXT("?team=CT");
+		const FString URL = FString(MapName) + FString::Printf(TEXT("?team=CT?bots=%d"), NumBots);
 		if (!Test.TestEqual("Browse",
 				static_cast<int32>(Engine.Browse(Context, FURL(nullptr, *URL, TRAVEL_Absolute), Error)),
 				static_cast<int32>(EBrowseReturnVal::Success)))
@@ -270,8 +273,8 @@ namespace
 		int32 NumCT = 0;
 		int32 NumT = 0;
 		GameMode->CountPawns(NumCT, NumT);
-		Test.TestEqual("Five CT pawns", NumCT, 5);
-		Test.TestEqual("Five T pawns", NumT, 5);
+		Test.TestEqual("The CT pawns", NumCT, PerTeam);
+		Test.TestEqual("The T pawns", NumT, PerTeam);
 		TSet<const APlayerStart*> Used;
 		for (const AShooterCharacter* Character : FindActors<AShooterCharacter>(*World))
 		{
@@ -298,7 +301,7 @@ namespace
 			Test.TestEqual(bCTSpawn ? TEXT("The CT spawn's floor") : TEXT("The T spawn's floor"),
 				Character->GetFloorSurface(), bCTSpawn ? CTSpawnSurface : TSpawnSurface);
 		}
-		Test.TestEqual("Ten different starts", Used.Num(), 10);
+		Test.TestEqual("A different start each", Used.Num(), 2 * PerTeam);
 		return World;
 	}
 
@@ -443,7 +446,7 @@ bool FShooterMapTenPawnsOnDeLeonTest::RunTest(const FString& Parameters)
 	// de_leon's physical materials (N30f): the T spawn's sand (dirt), the CT spawn's paving (tile, from X 9 m); a crate
 	// is wood, a wall concrete and a lamp of the tunnel metal to a bullet.
 	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
-	if (UWorld* World = PlaceTenPawns(*this, *Engine, DeLeon, SHOOTER_SURFACE_Tile, SHOOTER_SURFACE_Dirt, 900.0f))
+	if (UWorld* World = PlacePawns(*this, *Engine, DeLeon, SHOOTER_SURFACE_Tile, SHOOTER_SURFACE_Dirt, 900.0f))
 	{
 		TestEqual("A T spawn crate: wood",
 			SurfaceAlong(*World, FVector(-2150.0f, 1100.0f, 300.0f), FVector(-2150.0f, 1100.0f, 0.0f)),
@@ -459,6 +462,24 @@ bool FShooterMapTenPawnsOnDeLeonTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapTwentyPawnsTest, "ShooterGame.Map.TwentyPawns",
+	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
+
+bool FShooterMapTwentyPawnsTest::RunTest(const FString& Parameters)
+{
+	// The menu's largest match (19 bots and the player, the PS2's 20 players at 30 fps): ten a side on each map, each
+	// on its own start of its spawn, on the ground.
+	{
+		TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
+		(void)PlacePawns(*this, *Engine, DeLeon, SHOOTER_SURFACE_Tile, SHOOTER_SURFACE_Dirt, 900.0f, 19);
+		Engine->PreExit();
+	}
+	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
+	(void)PlacePawns(*this, *Engine, DeHarbor, SHOOTER_SURFACE_Concrete, SHOOTER_SURFACE_Concrete, 2000.0f, 19);
+	Engine->PreExit();
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapTenPawnsOnDeHarborTest, "ShooterGame.Map.TenPawnsOnDeHarbor",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
@@ -468,7 +489,7 @@ bool FShooterMapTenPawnsOnDeHarborTest::RunTest(const FString& Parameters)
 	// container metal and the boundary wall's panels concrete to a bullet.
 	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
 	if (UWorld* World =
-			PlaceTenPawns(*this, *Engine, DeHarbor, SHOOTER_SURFACE_Concrete, SHOOTER_SURFACE_Concrete, 2000.0f))
+			PlacePawns(*this, *Engine, DeHarbor, SHOOTER_SURFACE_Concrete, SHOOTER_SURFACE_Concrete, 2000.0f))
 	{
 		TestEqual("A T yard crate: wood",
 			SurfaceAlong(*World, FVector(-2200.0f, 650.0f, 300.0f), FVector(-2200.0f, 650.0f, 0.0f)),

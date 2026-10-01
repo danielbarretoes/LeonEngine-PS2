@@ -72,7 +72,7 @@ public:
 	int32 RoundsToWin = 3;
 
 	UPROPERTY()
-	int32 NumBots = FShooterMatchSettings::MaxBots;
+	int32 NumBots = FShooterMatchSettings::DefaultBots;
 
 	/** The last match's settings (its values within the menu's ranges). */
 	[[nodiscard]] FShooterMatchSettings GetMatchSettings() const;

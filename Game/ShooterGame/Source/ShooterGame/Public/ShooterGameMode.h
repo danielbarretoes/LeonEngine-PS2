@@ -146,9 +146,17 @@ public:
 	/** A ladder's volume (UShooterCharacterMovement's ladders; a map's Ladder node). */
 	static const FName LadderTag;
 
-	/** The players a team takes (CS: 5 a side); more bots are refused. */
+	/**
+	 * The players a team takes (CS: 5 a side); more bots are refused. A match of more bots than that (`?bots=N`) grows
+	 * it to take them and the player, and `?teamsize=N` or `-teamsize=N` (a larger bot match: the stress test) sets
+	 * it; never past MaxTeamSize.
+	 */
 	UPROPERTY(Config)
 	int32 MaxPlayersPerTeam = 5;
+
+	/** The most players a team can have: the maps' starts a team (sixteen in ShooterGame's maps). */
+	UPROPERTY(Config)
+	int32 MaxTeamSize = 16;
 
 	/** Teammates hurt each other (CS: mp_friendlyfire). */
 	UPROPERTY(Config)

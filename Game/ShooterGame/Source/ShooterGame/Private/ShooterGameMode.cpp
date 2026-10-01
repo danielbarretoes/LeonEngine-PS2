@@ -204,7 +204,18 @@ void AShooterGameMode::InitGame(const FString& MapName, const FString& Options, 
 	const TCHAR* CmdLine = FCommandLine::Get();
 	(void)FParse::Value(CmdLine, TEXT("seed="), RandomSeed);
 	// The main menu's match (ps2-polish P9, FShooterMatchSettings): the bots, their skill and the rounds to win.
-	NumBots = FMath::Clamp(UGameplayStatics::GetIntOption(Options, TEXT("bots"), NumBots), 0, 2 * MaxPlayersPerTeam);
+	// The teams' size: `?teamsize=` or `-teamsize=` (a larger bot match), else CS's 5, grown to take the menu's bots
+	// and the player.
+	MaxTeamSize = FMath::Max(1, MaxTeamSize);
+	int32 TeamSize = UGameplayStatics::GetIntOption(Options, TEXT("teamsize"), 0);
+	(void)FParse::Value(CmdLine, TEXT("teamsize="), TeamSize);
+	if (TeamSize > 0)
+	{
+		MaxPlayersPerTeam = TeamSize;
+	}
+	MaxPlayersPerTeam = FMath::Clamp(MaxPlayersPerTeam, 1, MaxTeamSize);
+	NumBots = FMath::Clamp(UGameplayStatics::GetIntOption(Options, TEXT("bots"), NumBots), 0, (2 * MaxTeamSize) - 1);
+	MaxPlayersPerTeam = FMath::Clamp(FMath::Max(MaxPlayersPerTeam, (NumBots + 2) / 2), 1, MaxTeamSize);
 	const FString DifficultyOption = UGameplayStatics::ParseOption(Options, TEXT("difficulty"));
 	if (!DifficultyOption.IsEmpty() && !ParseBotDifficulty(DifficultyOption, BotDifficulty))
 	{
@@ -228,8 +239,9 @@ void AShooterGameMode::InitGame(const FString& MapName, const FString& Options, 
 		MaxRounds = BotMatchRounds;
 		UE_LOG(LogShooter, Display, TEXT("Botmatch: %d round(s), seed %d"), BotMatchRounds, RandomSeed);
 	}
-	UE_LOG(LogShooter, Display, TEXT("Match: %d bot(s) (%s), %d round(s), the first team to %d wins"), NumBots,
-		GetBotDifficultyName(BotDifficulty), MaxRounds, GetRoundsToWin());
+	UE_LOG(LogShooter, Display,
+		TEXT("Match: %d bot(s) (%s), teams of %d at most, %d round(s), the first team to %d wins"), NumBots,
+		GetBotDifficultyName(BotDifficulty), MaxPlayersPerTeam, MaxRounds, GetRoundsToWin());
 	RequestGameplayAssets();
 }
 

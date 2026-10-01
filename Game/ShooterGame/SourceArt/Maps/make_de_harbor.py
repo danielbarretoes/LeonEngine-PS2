@@ -976,6 +976,15 @@ SITES = {"A": ((15.0, 15.0), (29.0, 27.0)), "B": ((15.0, -26.0), (30.0, -15.0))}
 # team), out of mid's line (the courtyard's stack and the blocks hide them from the T yard).
 CT_STARTS = [(27.0, 7.0), (27.0, -7.0), (29.0, 9.0), (29.0, -9.0), (24.5, 4.5)]
 T_STARTS = [(-28.5, y) for y in (-4.0, -2.0, 0.0, 2.0, 4.0)]
+# The larger matches' starts (up to sixteen a side), after CS's five: the CTs still out of mid's line (4.5 m and more
+# from Y = 0), on A's and B's sides in turn; the Ts around theirs.
+STARTS_PER_TEAM = 16
+CT_EXTRA_STARTS = [(24.5, -4.5), (27.0, 4.5), (27.0, -4.5), (25.0, 7.0), (25.0, -7.0), (29.0, 5.5), (29.0, -5.5),
+                   (24.5, 10.5), (24.5, -10.5), (23.0, 6.0), (23.0, -6.0)]
+T_EXTRA_STARTS = [(-24.5, 1.0), (-24.5, -1.0), (-26.5, 0.0), (-26.5, 2.0), (-26.5, -2.0), (-26.5, 4.0), (-26.5, -4.0),
+                  (-30.5, 0.0), (-30.5, 2.0), (-30.5, -2.0), (-24.5, 3.0)]
+BUY_ZONE_CT = ((22.0, -11.0), (31.5, 11.0))
+BUY_ZONE_T = ((-31.5, -8.0), (-24.0, 8.0))
 
 
 def distance_to_box(px, py, box):
@@ -983,6 +992,21 @@ def distance_to_box(px, py, box):
     dx = max(x0 - px, 0.0, px - x1)
     dy = max(y0 - py, 0.0, py - y1)
     return math.hypot(dx, dy)
+
+
+def check_starts():
+    """Sixteen starts a team, in their buy zone, and 1.4 m apart or more: two capsules (0.8 m) never spawn in each other."""
+    for team, starts, zone in (("CT", CT_STARTS + CT_EXTRA_STARTS, BUY_ZONE_CT), ("T", T_STARTS + T_EXTRA_STARTS,
+                                                                                BUY_ZONE_T)):
+        if len(starts) != STARTS_PER_TEAM:
+            raise ValueError("%d %s starts, not %d" % (len(starts), team, STARTS_PER_TEAM))
+        (x0, y0), (x1, y1) = zone
+        for i, (ax, ay) in enumerate(starts):
+            if not (x0 + AGENT_CLEARANCE <= ax <= x1 - AGENT_CLEARANCE and y0 + AGENT_CLEARANCE <= ay <= y1 - AGENT_CLEARANCE):
+                raise ValueError("the %s start %d at (%.1f, %.1f) is out of its buy zone" % (team, i, ax, ay))
+            for j, (bx, by) in enumerate(starts[:i]):
+                if math.hypot(ax - bx, ay - by) < 1.4:
+                    raise ValueError("the %s starts %d and %d are %.2f m apart" % (team, j, i, math.hypot(ax - bx, ay - by)))
 
 
 def check_navigation(b):
@@ -997,8 +1021,8 @@ def check_navigation(b):
             if overlap_x > 0.01 and overlap_y > 0.01 and overlap_z > 0.01:
                 raise ValueError("%s and %s overlap" % (first[4], second[4]))
     points = dict(("waypoint " + k, v) for k, v in WAYPOINTS.items())
-    points.update(("CT start %d" % i, p) for i, p in enumerate(CT_STARTS))
-    points.update(("T start %d" % i, p) for i, p in enumerate(T_STARTS))
+    points.update(("CT start %d" % i, p) for i, p in enumerate(CT_STARTS + CT_EXTRA_STARTS))
+    points.update(("T start %d" % i, p) for i, p in enumerate(T_STARTS + T_EXTRA_STARTS))
     points.update(("site %s" % k, ((lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5)) for k, (lo, hi) in SITES.items())
     for label, (x, y) in points.items():
         for box in b.obstacles:
@@ -1033,11 +1057,13 @@ def check_navigation(b):
 def build_gameplay(b):
     for site, ((x0, y0), (x1, y1)) in SITES.items():
         b.volume("Gameplay", "BombSite_" + site, (x0, y0, 0.0), (x1, y1, 3.0))
-    b.volume("Gameplay", "BuyZone_CT", (22.0, -11.0, 0.0), (31.5, 11.0, 3.0))
-    b.volume("Gameplay", "BuyZone_T", (-31.5, -8.0, 0.0), (-24.0, 8.0, 3.0))
+    for team, ((x0, y0), (x1, y1)) in (("CT", BUY_ZONE_CT), ("T", BUY_ZONE_T)):
+        b.volume("Gameplay", "BuyZone_" + team, (x0, y0, 0.0), (x1, y1, 3.0))
 
-    # Five starts a team, 2 m apart or more: the CTs face south, the Ts north.
-    for index, ((ctx, cty), (tx, ty)) in enumerate(zip(CT_STARTS, T_STARTS)):
+    # Sixteen starts a team: the CTs face south, the Ts north. The first five of each are CS's 5v5 (the bot match's, as
+    # before); the others, after them, take the larger matches' players.
+    check_starts()
+    for index, ((ctx, cty), (tx, ty)) in enumerate(zip(CT_STARTS + CT_EXTRA_STARTS, T_STARTS + T_EXTRA_STARTS)):
         suffix = "" if index == 0 else ".%03d" % index
         b.empty("Gameplay", "PlayerStart_CT" + suffix, (ctx, cty, START_HEIGHT), "ARROWS", yaw=180.0)
         b.empty("Gameplay", "PlayerStart_T" + suffix, (tx, ty, START_HEIGHT), "ARROWS", yaw=0.0)

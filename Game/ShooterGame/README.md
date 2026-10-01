@@ -127,8 +127,9 @@ takes it back when the menu closes. A menu takes every other key while it shows:
   `SourceArt/Maps/make_main_menu.py`; its game mode `AShooterGame_Menu` by the map's prefix, no pawn, the camera swaying
   slowly at the map's player start): **Map** (the project's maps: `[/Script/ShooterGame.ShooterMainMenuWidget]
   +MapNames=`: de_leon, then de_harbor), **Bot difficulty** (Easy, Normal, Hard, Expert: the bots' presets, [Bots](#bots)),
-  **Rounds to win** (3 by default, a best of 5; 5, 8, 16: `MaxRounds = 2 N - 1`), **Bots** (1 to 9: ten players at
-  most, the PS2's budget), **Options**, **Start** and, on Win64, **Quit**. The choices come from the saved settings and
+  **Rounds to win** (3 by default, a best of 5; 5, 8, 16: `MaxRounds = 2 N - 1`), **Bots** (1 to 19, 9 by default: twenty
+  players at most, the most the PS2 holds at 30 fps; the teams grow to take them, `MaxPlayersPerTeam` 5 up to the
+  maps' sixteen starts a side, [Engine/Platforms/PS2/Documentation/Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md#players)), **Options**, **Start** and, on Win64, **Quit**. The choices come from the saved settings and
   Start saves them there, then travels to the map with them as URL options (`UGameplayStatics::OpenLevel`).
 - **The team menu** (`UShooterTeamMenuWidget`): on joining a match without `?team=` the player spectates and chooses
   **Counter-Terrorists** or **Terrorists** (each with its players), **Auto-select** (the smaller team) or **Spectate**;

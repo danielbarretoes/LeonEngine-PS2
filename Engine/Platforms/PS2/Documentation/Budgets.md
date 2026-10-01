@@ -438,6 +438,53 @@ before, GMalloc's 4 828 KB (4 794 KB at 0.25.0).
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
 | minimap | 29.62 | 33.76 ms | 33.50 / 33.50 / 33.50 ms | 1140.15 ms | 4.07 ms | 6.60 ms | 0.20 + 2.27 ms | 0.11 ms | 20.68 ms (18.72) | 7987 | 11.0 KB | 4828 KB | 4594 KB | 73.8 | 1928 | 2.8.2.0, d29e64bc |
 
+<a id="players"></a>**Players** (after the minimap: how many players the PS2 holds before it loses 30 fps). A bot match of
+2 x N bots (`MeasurePS2 -Map <map> -ExtraArgs -teamsize=N`: two rounds with seed 7, watched through a bot's eyes, 120
+s; the maps have sixteen starts a side since this measure). Stable is p95 at 33.5 ms (every frame but the odd one on
+the second field) and no crash. The 20 and 22 rows were measured again on the maps' final starts; the others on the
+first layout of the extra starts (the first five of a side are the same).
+
+| Players | Map | fps | p50 / p95 / p99 | worst | world | scene | GMalloc peak | UObjects peak | Stable |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---|
+| 10 | de_leon (the minimap row) | 29.62 | 33.5 / 33.5 / 33.5 ms | 1 140 ms (the menu's travel) | 4.07 ms | 6.60 ms | 4 828 KB | 1 928 | yes |
+| 12 | de_leon | 29.90 | 33.5 / 33.5 / 34.3 ms | 127 ms | 5.74 ms | 6.71 ms | 5 119 KB | 2 016 | yes |
+| 12 | de_harbor | 29.87 | 33.5 / 33.5 / 34.8 ms | 131 ms | 6.50 ms | 7.59 ms | 5 276 KB | 2 156 | yes |
+| 16 | de_leon | 29.85 | 33.5 / 33.5 / 40.5 ms | 127 ms | 7.77 ms | 8.05 ms | 5 600 KB | 2 100 | yes |
+| 16 | de_harbor | 29.63 | 33.5 / 33.5 / 50.3 ms | 131 ms | 9.14 ms | 8.46 ms | 5 881 KB | 2 238 | yes |
+| **20** | de_leon | 29.63 | 33.5 / 33.5 / 50.3 ms | 142 ms | 10.92 ms | 10.28 ms | 6 181 KB | 2 182 | **yes: the menu's largest match** |
+| **20** | de_harbor | 29.33 | 33.5 / 33.5 / 50.3 ms | 148 ms | 11.42 ms | 9.70 ms | 6 357 KB | 2 326 | **yes** |
+| 22 | de_leon | 28.59 | 33.5 / 50.3 / 60.0 ms | 159 ms | 11.73 ms | 10.95 ms | 6 504 KB | 2 226 | no (p95) |
+| 22 | de_harbor | 28.86 | 33.5 / 50.3 / 50.3 ms | 148 ms | 12.61 ms | 10.52 ms | 6 502 KB | 2 368 | no (p95) |
+| 24 | de_leon | 25.90 | 33.5 / 66.8 / 66.8 ms | 160 ms | 14.07 ms | 11.89 ms | 6 616 KB | 2 268 | no |
+| 24 | de_harbor | 24.58 | 33.5 / 66.8 / 66.8 ms | 164 ms | 16.74 ms | 11.93 ms | 6 895 KB | 2 406 | no |
+| 32 | de_leon | 15.73 | 53.8 / 150.3 / 150.3 ms | 177 ms | 38.05 ms | 15.39 ms | 7 463 KB | 2 436 | no (1.9 steps a frame) |
+| 32 | de_harbor | 14.84 | 66.8 / 150.3 / 150.3 ms | 181 ms | 41.72 ms | 16.32 ms | 7 932 KB | 2 574 | no |
+
+- **The limit: 20 players** on both maps (p99 degrades from 16: single frames on the third field when a round's fights
+  bunch up). 22 misses p95 on both. No run crashed or asserted, and every bot match ended with its checker clean.
+- **What limits first: the EE's game thread, the world's tick**, about 0.45 ms a player at 30 Hz (de_leon 4.1 ms at 10,
+  10.9 at 20, 14.1 at 24): the actors' tick (6.8 ms at 20: the character movement 1.9, the bots' brains 0.9, the
+  pawn sensing 0.35 and some 3.7 ms of the skinned meshes' animation ticks), the end of frame updates (2.2 ms: the
+  poses and the proxies) and the characters' overlaps (0.7 ms, by pairs: 3.5 ms at 32). The scene grows too (GS
+  Skinned 1.6 ms at 12, 3.4 at 20, 4.8 at 32: VU1 skins, the EE sets the batches up) and the vblank wait shrinks to
+  nothing; past 24 a frame needs two fixed steps (1.2 a frame at 24, 1.9 at 32) and the spiral sets in. Not the limit:
+  the AI's perception (time-sliced, 0.35 to 1.2 ms), VU1 and the GS (the GIF's 7 to 13 KB a frame), memory: GMalloc's
+  peak is 7.9 MB at 32 players of 24 MB, the nearest tag budgets GameMisc (1 335 of 1 536 KB at 32; 854 at 20) and
+  RenderLists (2 813 of 4 096 KB at 32), the UObjects 2 574 of 8 192.
+- **Win64** (Development, the GS emulator, de_leon, windowed): 30 fps paced at 10, 20 and 32 players (the world 0.23,
+  0.43 and 0.61 ms a frame, the scene 1.5, 2.9 and 4.2 ms); there the limit is the maps' sixteen starts a side. The bot
+  match replays identically at 12, 16, 20, 24 and 32 players on both maps (two runs each, `-botmatch -teamsize=N
+  -seed=7`).
+- So the main menu offers up to 19 bots (`FShooterMatchSettings::MaxBots`; 9 by default, CS's 5v5), and the teams grow
+  to take them (`MaxPlayersPerTeam` 5, up to `MaxTeamSize` 16, the starts).
+
+| Build | fps | avg | p50 / p95 / p99 | worst | world | scene | HUD + canvas | audio | present (vblank wait) | tris | GIF / frame | GMalloc peak | heap at exit | allocs / frame | UObjects peak | PCSX2, Measure.ini |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| de_leon 20 players | 29.63 | 33.75 ms | 33.50 / 33.50 / 50.25 ms | 141.98 ms | 10.92 ms | 10.28 ms | 0.23 + 2.33 ms | 0.13 ms | 11.57 ms (8.46) | 14122 | 10.2 KB | 6181 KB | 5733 KB | 14.2 | 2182 | 2.8.2.0, d29e64bc |
+| de_harbor 20 players | 29.33 | 34.10 ms | 33.50 / 33.50 / 50.25 ms | 147.66 ms | 11.42 ms | 9.70 ms | 0.24 + 2.47 ms | 0.19 ms | 11.84 ms (8.74) | 13877 | 7.8 KB | 6357 KB | 5985 KB | 15.9 | 2326 | 2.8.2.0, d29e64bc |
+| de_leon 22 players | 28.59 | 34.97 ms | 33.50 / 50.25 / 60.00 ms | 158.66 ms | 11.73 ms | 10.95 ms | 0.24 + 2.56 ms | 0.15 ms | 11.22 ms (7.99) | 14685 | 12.2 KB | 6504 KB | 6019 KB | 15.7 | 2226 | 2.8.2.0, d29e64bc |
+| de_harbor 22 players | 28.86 | 34.65 ms | 33.50 / 50.25 / 50.25 ms | 147.66 ms | 12.61 ms | 10.52 ms | 0.25 + 2.50 ms | 0.26 ms | 10.53 ms (7.34) | 14310 | 10.0 KB | 6502 KB | 6117 KB | 18.0 | 2368 | 2.8.2.0, d29e64bc |
+
 **0.25.0** ([ps2-polish](../../../../Docs/PLANS/ps2-polish.md) P10). Every frame after the first falls on the second
 field (p50 / p95 / p99 33.5 ms); the average (29.62 fps) is below 30 only by the first frame, which since P9 holds the
 travel from the main menu to de_leon (1 137 ms). P6's HUD and scoreboard, measured here for the first time, take the

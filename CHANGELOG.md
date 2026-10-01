@@ -9,6 +9,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Larger matches: up to 20 players** (Budgets.md, "Players"). A bot sweep in PCSX2 (`MeasurePS2 -ExtraArgs
+  -teamsize=N`, both maps, 10 to 32 players) finds the PS2 at 30 fps (p95 33.5 ms) up to 20 players, 22 missing it on
+  both maps; the EE's world tick limits first (about 0.45 ms a player), not VU1, the GS, the AI's perception or memory
+  (7.9 MB at 32 players). The main menu offers 1 to 19 bots (9 by default, as before); the teams grow to take them
+  (`MaxPlayersPerTeam` 5 up to `MaxTeamSize` 16), and `?teamsize=` / `-teamsize=N` set them (`-botmatch -teamsize=10`:
+  20 bots). On Win64 the bot match replays identically at 12 to 32 players.
+  - de_leon and de_harbor have sixteen starts a side (`make_de_leon.py`, `make_de_harbor.py`: CS's five first, as
+    before, then eleven in the buy zones, checked 1.4 m apart, out of everything, near a waypoint, the CTs out of
+    mid's line); the 5v5 bot matches replay as before.
+  - Tests: `ShooterGame.Map.TwentyPawns` (the menu's largest match on each map), `ShooterGame.Menu.MatchOptions` (the
+    teams' sizes), the maps' sixteen starts (131 ShooterGame tests).
 - **The real minimap** ([ps2-polish](Docs/PLANS/ps2-polish.md) P7): the radar draws the map's overview under its dots,
   turned with the view, as CS 1.6's overviews ([Docs/LEVELS.md](Docs/LEVELS.md#the-overview)).
   - LeonEd's `FMapOverview` renders each map at its import, after the lighting bake: the GS scene renderer's frame of

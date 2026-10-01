@@ -95,6 +95,12 @@ Still to check:
   vibration.
 - PAL: the region comes from ROMVER (`-PAL` forces it) and should give 25 fps, but it has never been run or measured.
 
+- The PS2 holds 20 players at 30 fps (Budgets.md, "Players"), so the menu offers 19 bots. What limits first is the
+  EE's world tick, about 0.45 ms a player (the characters' movement and animation ticks, the end of frame pose
+  updates, the overlap pairs). Worth optimizing for more players: the animation of distant or unseen pawns ticked at a
+  lower rate (UE's update rate optimizations; the skeletal throttle already skips their poses), the characters'
+  overlaps through the broadphase's pairs, and the movement's sweeps.
+
 ## Measurements
 
 PCSX2 is not hardware. It does not charge the EE's clock for GS drawing, and it emulates neither the data cache nor the

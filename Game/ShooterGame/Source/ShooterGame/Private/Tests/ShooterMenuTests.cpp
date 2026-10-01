@@ -181,6 +181,28 @@ bool FShooterMenuMatchOptionsTest::RunTest(const FString& Parameters)
 	GameMode->InitGame(TEXT("de_leon"), TEXT("?difficulty=Nightmare"), Error);
 	TestEqual("Nine bots by default", GameMode->NumBots, 9);
 	TestTrue("A bad difficulty keeps Normal", GameMode->BotDifficulty == EShooterBotDifficulty::Normal);
+	TestEqual("Teams of CS's five", GameMode->MaxPlayersPerTeam, 5);
+	TestEqual("The menu's default: nine bots", FShooterMatchSettings().NumBots, 9);
+
+	// The menu's largest match (the PS2's 20 players, Budgets.md "Players"): the teams grow to take its bots and the
+	// player; `?teamsize=` sets them (a larger bot match), never past the maps' sixteen starts a team.
+	TestEqual("The menu offers up to 19 bots", FShooterMatchSettings::MaxBots, 19);
+	struct FSizeCase
+	{
+		const TCHAR* Options;
+		int32 Bots;
+		int32 TeamSize;
+	};
+	for (const FSizeCase& Case : {FSizeCase{TEXT("?bots=19"), 19, 10}, FSizeCase{TEXT("?bots=10"), 10, 6},
+			 FSizeCase{TEXT("?bots=3"), 3, 5}, FSizeCase{TEXT("?bots=99"), 31, 16},
+			 FSizeCase{TEXT("?teamsize=8"), 9, 8}, FSizeCase{TEXT("?teamsize=40?bots=4"), 4, 16}})
+	{
+		FScopedTestWorld SizeWorld;
+		AShooterGameMode* SizeMode = SetUpMatch(*SizeWorld);
+		SizeMode->InitGame(TEXT("de_leon"), Case.Options, Error);
+		TestEqual(*FString::Printf(TEXT("%s: the bots"), Case.Options), SizeMode->NumBots, Case.Bots);
+		TestEqual(*FString::Printf(TEXT("%s: the teams"), Case.Options), SizeMode->MaxPlayersPerTeam, Case.TeamSize);
+	}
 	return true;
 }
 

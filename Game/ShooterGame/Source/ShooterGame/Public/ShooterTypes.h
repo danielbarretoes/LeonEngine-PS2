@@ -437,9 +437,13 @@ struct SHOOTERGAME_API FShooterBotSkill
  */
 struct SHOOTERGAME_API FShooterMatchSettings
 {
-	/** The fewest and the most bots the menu offers: 10 players at most, the PS2's budget (the player counts). */
+	/**
+	 * The fewest and the most bots the menu offers: 20 players at most with the player, the most the PS2 holds at 30
+	 * fps (p95 33.5 ms on both maps; 22 miss it: Budgets.md, "Players"). The default stays CS's 5v5.
+	 */
 	static constexpr int32 MinBots = 1;
-	static constexpr int32 MaxBots = 9;
+	static constexpr int32 MaxBots = 19;
+	static constexpr int32 DefaultBots = 9;
 
 	/** The map (a long package name, `/Game/Maps/de_leon`). */
 	FString MapName;
@@ -448,7 +452,7 @@ struct SHOOTERGAME_API FShooterMatchSettings
 	/** The rounds a team needs to win (3: a best of 5). */
 	int32 RoundsToWin = 3;
 	/** The bots in the match, shared between the teams around the player (AShooterGameMode::RebalanceBots). */
-	int32 NumBots = MaxBots;
+	int32 NumBots = DefaultBots;
 
 	/** The menu's choices of rounds to win (CS's best of 5, 9 and 15, and mp_maxrounds 30's 16). */
 	[[nodiscard]] static TArrayView<const int32> GetRoundsToWinChoices();
