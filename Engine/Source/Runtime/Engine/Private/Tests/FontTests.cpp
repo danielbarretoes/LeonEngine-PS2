@@ -121,8 +121,8 @@ bool FFontMetricsTest::RunTest(const FString& Parameters)
 	TestEqual("Measured as '?'", Font.GetStringSize(TEXT("\xe2\x82\xac")), Font.Characters['?'].Advance);
 	float Width = 0.0f;
 	float Height = 0.0f;
-	FCanvas::MeasureText(nullptr, TEXT("Hola"), Width, Height);
-	TestEqual("The canvas measures in the small font", Width, float(Font.GetStringSize(TEXT("Hola"))));
+	FCanvas::MeasureText(nullptr, TEXT("Hello"), Width, Height);
+	TestEqual("The canvas measures in the small font", Width, float(Font.GetStringSize(TEXT("Hello"))));
 	TestEqual("A line", Height, Font.GetLineHeight());
 	return true;
 }

@@ -9,7 +9,7 @@
  * The main menu (ps2-polish P9; UE ShooterGame's FShooterMainMenu), the MainMenu map's (AShooterPlayerController_Menu
  * shows it): the match to play and the options.
  *
- * - Map: the project's maps (MapNames, DefaultGame.ini: de_leon and de_puerto), shown by their short names.
+ * - Map: the project's maps (MapNames, DefaultGame.ini: de_leon and de_harbor), shown by their short names.
  * - Difficulty: Easy, Normal, Hard, Expert (the bots' presets, AShooterAIController::DifficultyPresets).
  * - Rounds to win: 3 (a best of 5), 5, 8 or 16 (MaxRounds = 2 N - 1).
  * - Bots: 1 to 9 (ten players at most, the PS2's budget), shared out around the player's team.

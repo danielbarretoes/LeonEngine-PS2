@@ -184,7 +184,7 @@ if (-not $NoPS2)
 	}
 	if (Wants "ShooterGame")
 	{
-		Write-Host "         (ShooterGame: the main menu, then de_leon or de_puerto against nine bots, played with the pad)"
+		Write-Host "         (ShooterGame: the main menu, then de_leon or de_harbor against nine bots, played with the pad)"
 	}
 	Write-Host "         PCSX2: enable Settings > Advanced > Enable Host Filesystem (the staged config is read through host:),"
 	Write-Host "         then boot the ELF (pcsx2-qt -fastboot -elf <file>). TestPAL prints its result to the EE log."

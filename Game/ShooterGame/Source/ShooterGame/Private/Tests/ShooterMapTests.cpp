@@ -30,7 +30,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-// The maps (de_leon, de_puerto) and their rules: each imported map holds what the game needs and its waypoint graph
+// The maps (de_leon, de_harbor) and their rules: each imported map holds what the game needs and its waypoint graph
 // covers it, the project's RequiredTags reject a map without it, and a headless match on each places ten pawns at their
 // teams' starts (gate G6 in a test).
 
@@ -38,7 +38,7 @@ namespace
 {
 
 	const TCHAR* const DeLeon = TEXT("/Game/Maps/de_leon");
-	const TCHAR* const DePuerto = TEXT("/Game/Maps/de_puerto");
+	const TCHAR* const DeHarbor = TEXT("/Game/Maps/de_harbor");
 
 	/** A mount point over a fresh folder of the project's Intermediate directory, for imports (never Content). */
 	class FScopedShooterTestContent
@@ -300,19 +300,19 @@ bool FShooterMapDeLeonHoldsTheGameTest::RunTest(const FString& Parameters)
 	return TestMapHoldsTheGame(*this, {DeLeon, 6, 2, 1, 2, 550.0f});
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapDePuertoHoldsTheGameTest, "ShooterGame.Map.DePuertoHoldsTheGame",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapDeHarborHoldsTheGameTest, "ShooterGame.Map.DeHarborHoldsTheGame",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FShooterMapDePuertoHoldsTheGameTest::RunTest(const FString& Parameters)
+bool FShooterMapDeHarborHoldsTheGameTest::RunTest(const FString& Parameters)
 {
-	// de_puerto, the second map: three lookouts a site, the ladder up the container stack at A, the quay's clip (nobody
+	// de_harbor, the second map: three lookouts a site, the ladder up the container stack at A, the quay's clip (nobody
 	// falls into the water); the CT starts beside the courtyard's opening, out of mid's line.
-	TestMapHoldsTheGame(*this, {DePuerto, 6, 1, 1, 1, 450.0f});
+	TestMapHoldsTheGame(*this, {DeHarbor, 6, 1, 1, 1, 450.0f});
 	const TArray<FString>& MapNames = GetDefault<UShooterMainMenuWidget>()->MapNames;
 	if (TestEqual("The menu offers two maps", MapNames.Num(), 2))
 	{
 		TestEqual("de_leon first", MapNames[0], FString(DeLeon));
-		TestEqual("de_puerto second", MapNames[1], FString(DePuerto));
+		TestEqual("de_harbor second", MapNames[1], FString(DeHarbor));
 	}
 	return true;
 }
@@ -325,7 +325,7 @@ bool FShooterMapNavigationCoverageTest::RunTest(const FString& Parameters)
 	// Every map's waypoint graph is one piece (each waypoint reaches every other along the links, the ladders' climbs
 	// included), and it covers what the bots go for: a waypoint within 3 m of each bomb site's middle and within 6 m of
 	// each player start.
-	for (const TCHAR* MapName : {DeLeon, DePuerto})
+	for (const TCHAR* MapName : {DeLeon, DeHarbor})
 	{
 		UPackage* Package = LoadPackage(nullptr, MapName, LOAD_None);
 		UWorld* World = Package != nullptr ? UWorld::FindWorldInPackage(Package) : nullptr;
@@ -389,9 +389,9 @@ bool FShooterMapRequiredTagsTest::RunTest(const FString& Parameters)
 	UObject* DeLeonMap = UImportAssetsCommandlet::ImportAsset(SourceArtFile(TEXT("SourceArt/Maps/de_leon.glb")),
 		TEXT("/ShooterGameTest/Maps/de_leon"), FString(), TEXT("Map"), TMap<FString, FString>());
 	TestNotNull("de_leon passes", DeLeonMap);
-	UObject* DePuertoMap = UImportAssetsCommandlet::ImportAsset(SourceArtFile(TEXT("SourceArt/Maps/de_puerto.glb")),
-		TEXT("/ShooterGameTest/Maps/de_puerto"), FString(), TEXT("Map"), TMap<FString, FString>());
-	TestNotNull("de_puerto passes", DePuertoMap);
+	UObject* DeHarborMap = UImportAssetsCommandlet::ImportAsset(SourceArtFile(TEXT("SourceArt/Maps/de_harbor.glb")),
+		TEXT("/ShooterGameTest/Maps/de_harbor"), FString(), TEXT("Map"), TMap<FString, FString>());
+	TestNotNull("de_harbor passes", DeHarborMap);
 
 	for (const TCHAR* Entry :
 		{TEXT("TriggerVolume:BombSite+A"), TEXT("TriggerVolume:BombSite+B"), TEXT("TriggerVolume:BuyZone+CT"),
@@ -432,16 +432,16 @@ bool FShooterMapTenPawnsOnDeLeonTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapTenPawnsOnDePuertoTest, "ShooterGame.Map.TenPawnsOnDePuerto",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterMapTenPawnsOnDeHarborTest, "ShooterGame.Map.TenPawnsOnDeHarbor",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FShooterMapTenPawnsOnDePuertoTest::RunTest(const FString& Parameters)
+bool FShooterMapTenPawnsOnDeHarborTest::RunTest(const FString& Parameters)
 {
-	// de_puerto's surfaces: both spawns concrete (the T yard's asphalt, the CT yard's slabs); a pallet crate is wood, a
+	// de_harbor's surfaces: both spawns concrete (the T yard's asphalt, the CT yard's slabs); a pallet crate is wood, a
 	// container metal and the boundary wall's panels concrete to a bullet.
 	TStrongObjectPtr<UGameEngine> Engine(NewObject<UGameEngine>());
 	if (UWorld* World =
-			PlaceTenPawns(*this, *Engine, DePuerto, SHOOTER_SURFACE_Concrete, SHOOTER_SURFACE_Concrete, 2000.0f))
+			PlaceTenPawns(*this, *Engine, DeHarbor, SHOOTER_SURFACE_Concrete, SHOOTER_SURFACE_Concrete, 2000.0f))
 	{
 		TestEqual("A T yard crate: wood",
 			SurfaceAlong(*World, FVector(-2200.0f, 650.0f, 300.0f), FVector(-2200.0f, 650.0f, 0.0f)),

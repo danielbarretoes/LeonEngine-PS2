@@ -1,7 +1,7 @@
 # ShooterGame (Win64 and PS2)
 
 An offline Counter-Strike 1.6 clone, modelled on UE's ShooterGame sample: two teams (CT and T), five players a side,
-on `de_leon`, a desert town, and `de_puerto`, an industrial port, both built in Blender, on Win64 and the PS2 (30 fps in
+on `de_leon`, a desert town, and `de_harbor`, an industrial port, both built in Blender, on Win64 and the PS2 (30 fps in
 PCSX2, from its pak or a bootable ISO).
 At 0.25.0 it has CS 1.6's movement (fall damage, ladders, the jump's stamina, tagging, footsteps by surface), its
 arsenal (knife, Glock, USP, Desert Eagle, MP5, AK-47, M4A1, AWP; HE, flashbang and smoke grenades) with the economy,
@@ -75,7 +75,7 @@ A match's URL options ([ps2-polish](../../Docs/PLANS/ps2-polish.md) P9; the main
 | `?winrounds=` | the rounds to win, N: `MaxRounds = 2 N - 1`, the halftime after round N - 1 | `MaxRounds` (30: the first to 16) |
 | `?seed=` | the round stream's seed (the bomb's carrier, the terrorists' site) | `RandomSeed` |
 
-`ShooterGame.exe /Game/Maps/de_leon?team=T?seed=42`, or `-map=/Game/Maps/de_puerto?team=T`; `-botmatch` skips the menu
+`ShooterGame.exe /Game/Maps/de_leon?team=T?seed=42`, or `-map=/Game/Maps/de_harbor?team=T`; `-botmatch` skips the menu
 by itself ([Bot match](#bot-match)).
 
 ## Controls
@@ -126,7 +126,7 @@ takes it back when the menu closes. A menu takes every other key while it shows:
 - **The main menu** (`UShooterMainMenuWidget`, the `MainMenu` map: GameDefaultMap, a small desert backdrop made by
   `SourceArt/Maps/make_main_menu.py`; its game mode `AShooterGame_Menu` by the map's prefix, no pawn, the camera swaying
   slowly at the map's player start): **Map** (the project's maps: `[/Script/ShooterGame.ShooterMainMenuWidget]
-  +MapNames=`: de_leon, then de_puerto), **Bot difficulty** (Easy, Normal, Hard, Expert: the bots' presets, [Bots](#bots)),
+  +MapNames=`: de_leon, then de_harbor), **Bot difficulty** (Easy, Normal, Hard, Expert: the bots' presets, [Bots](#bots)),
   **Rounds to win** (3 by default, a best of 5; 5, 8, 16: `MaxRounds = 2 N - 1`), **Bots** (1 to 9: ten players at
   most, the PS2's budget), **Options**, **Start** and, on Win64, **Quit**. The choices come from the saved settings and
   Start saves them there, then travels to the map with them as URL options (`UGameplayStatics::OpenLevel`).
@@ -852,8 +852,8 @@ when nothing changed; a score formats one line, a kill three).
 
 - `-botmatch`: the game starts on the main menu's map as always, whose game mode travels at once to de_leon
   (`AShooterGame_Menu`'s `BotMatchMapName`: BotMatch.bat and MeasurePS2 name no map); with `-map=<map>` the game opens
-  that map instead and plays the same match on it (`BotMatch.bat 10 7 /Game/Maps/de_puerto`, `MeasurePS2 -Map
-  /Game/Maps/de_puerto`); there the local player spectates
+  that map instead and plays the same match on it (`BotMatch.bat 10 7 /Game/Maps/de_harbor`, `MeasurePS2 -Map
+  /Game/Maps/de_harbor`); there the local player spectates
   (no team), ten bots join, five a side (`RebalanceBots`), and the match is `-rounds=` rounds long
   (10; it sets `MaxRounds`, so the teams switch sides after half of them and a team with the majority ends it sooner);
   then the game exits. `-seed=` sets `RandomSeed` (as `?seed=`).
@@ -931,7 +931,7 @@ Looking at the map: `ShooterGame.exe /Game/Maps/de_leon?team=CT -ExecCmds="ViewF
 -ExitAfterFrames=20` saves a view from a point (centimetres and degrees; `ViewFrom 0 0 5200 -89 0` looks down on the
 whole map); the view stays after the round's spawn until `ViewPawn`.
 
-## de_puerto
+## de_harbor
 
 The second map (after 0.25.0), a 64 × 56 m industrial port at the end of the afternoon, an original layout made by the
 same pipeline as de_leon with nothing of its art (north up: the T truck yard to the south, the CT yard to the north, A
@@ -967,19 +967,19 @@ site), mid through a 3.5 m gate into the courtyard, the CT spawn's flank (the co
 spawn), and the alley to the warehouse's front door (a vestibule: a container faces the door), with a roofed connector
 from mid to the alley. The CTs reach A by a 6 m gap in a wall of stacked containers and B by a 5 m door. Asphalt,
 cast concrete, precast wall panels, painted corrugated sheet with rust, painted steel, red, blue and green containers,
-pine pallet crates and water, painted by `SourceArt/Maps/make_de_puerto.py` (P4, the corrugated sheet P8); a late, low
+pine pallet crates and water, painted by `SourceArt/Maps/make_de_harbor.py` (P4, the corrugated sheet P8); a late, low
 sun, a cooler sky light, seven lamps (the connector, the alley's shed, the warehouse) baked by LeonCook; the coast
 sky (`make_sky.py`'s coast preset, `/Game/Sky/T_Sky_Coast`) and a hazier fog (25 to 90 m). 4 216 triangles in 112
 pieces, 9 cells, 22 portals, 47 waypoints with three lookouts a site and the ladder's climb. The plan, the cells, the
-textures and the nodes are in [Docs/LEVELS.md](../../Docs/LEVELS.md#worked-example-de_puerto) and
-[Docs/ART_PIPELINE.md](../../Docs/ART_PIPELINE.md#the-map-de_puerto); `SourceArt/ImportList.ini` imports it to
-`/Game/Maps/de_puerto`, and the main menu offers it after de_leon (`+MapNames=`).
+textures and the nodes are in [Docs/LEVELS.md](../../Docs/LEVELS.md#worked-example-de_harbor) and
+[Docs/ART_PIPELINE.md](../../Docs/ART_PIPELINE.md#the-map-de_harbor); `SourceArt/ImportList.ini` imports it to
+`/Game/Maps/de_harbor`, and the main menu offers it after de_leon (`+MapNames=`).
 
 The bots play it as de_leon (its waypoints, lookouts, ladder and sites): over seeds 1 to 48 of `BotMatch.bat 10 <seed>
-/Game/Maps/de_puerto` the terrorists win 53 % of the rounds (1 to 24: 57 %; de_leon 56 %), with 7.1 kills a round;
+/Game/Maps/de_harbor` the terrorists win 53 % of the rounds (1 to 24: 57 %; de_leon 56 %), with 7.1 kills a round;
 fewer rounds reach a plant than on de_leon (the duels at the chicane and the vestibule decide most). Seed 7 logs
 `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides switched after round 5, reasons [3,3,4,4,4,3,3,3]`.
-On the PS2 (PCSX2, `MeasurePS2 -Map /Game/Maps/de_puerto`) it runs at 29.92 fps, p50 / p95 33.5 ms, 80.8 draws a frame,
+On the PS2 (PCSX2, `MeasurePS2 -Map /Game/Maps/de_harbor`) it runs at 29.92 fps, p50 / p95 33.5 ms, 80.8 draws a frame,
 GMalloc's peak 5 176 KB, the map's load 710 KB of `LoadMapMisc`'s 1 024
 ([Budgets.md](../../Engine/Platforms/PS2/Documentation/Budgets.md)); the ISO boots and plays it from the disc.
 
@@ -991,7 +991,7 @@ Game/ShooterGame/
 ├── Config/                            DefaultEngine.ini (map, game mode, Weapon channel, surface types),
 │                                      DefaultGame.ini (tuning, weapons, bots, memory card, cook), DefaultInput.ini
 │                                      (CS keys, mouse, DualShock), DefaultEditor.ini (map import rules)
-├── Content/                           Maps/de_leon.lmap, de_puerto.lmap, MainMenu.lmap (+ their Meshes, Materials),
+├── Content/                           Maps/de_leon.lmap, de_harbor.lmap, MainMenu.lmap (+ their Meshes, Materials),
 │                                      Sky/ (the cube maps), Characters/ (CT and T bodies,
 │                                      arms, animations), Weapons/ (meshes, materials), Sounds/, PhysicalMaterials/
 ├── SourceArt/                         Blender and Python scripts (Maps/, Characters/, Weapons/, Sounds/, Sky/, leon_art.py,

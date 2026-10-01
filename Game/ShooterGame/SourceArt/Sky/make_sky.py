@@ -1,12 +1,12 @@
 """Generates the maps' skies as high dynamic range environments for LeonEd's cube map import: de_leon's desert day
-and de_puerto's hazy coast at the end of the afternoon.
+and de_harbor's hazy coast at the end of the afternoon.
 
     python Game/ShooterGame/SourceArt/Sky/make_sky.py [--out <folder>]
 
 Writes Sky_Desert.hdr and Sky_Coast.hdr next to this script (`--out` writes there instead), which ImportList.ini
 imports as the cube maps /Game/Sky/T_Sky_Desert and /Game/Sky/T_Sky_Coast (UTextureCubeFactory: six faces, tone-mapped;
 Docs/ART_PIPELINE.md, "The sky"). The maps' world settings name them (Maps/make_de_leon.py's and
-Maps/make_de_puerto.py's WorldSettings nodes). Each sky is a preset (PRESETS) of the same painting: its colours, its
+Maps/make_de_harbor.py's WorldSettings nodes). Each sky is a preset (PRESETS) of the same painting: its colours, its
 haze, its clouds and the map script whose sun it shows.
 
 The image is a long-lat (equirectangular) panorama of WIDTH x HEIGHT texels in the engine's axes (X north, Y east, Z up;
@@ -68,7 +68,7 @@ CLOUD_COVER = (0.56, 0.80)
 CLOUD_LIT = (1.30, 1.26, 1.20)
 CLOUD_SHADE = (0.62, 0.64, 0.70)
 
-# The skies: (file, map script, the values above by name). The coast (de_puerto): a greyer zenith, a cool haze that
+# The skies: (file, map script, the values above by name). The coast (de_harbor): a greyer zenith, a cool haze that
 # climbs higher, a warm glow toward the low sun, the sea below the horizon, more clouds from another seed.
 DESERT = {
     "ZENITH": ZENITH, "HORIZON": HORIZON, "HAZE_POWER": HAZE_POWER, "SUN_SIDE_BRIGHTNESS": SUN_SIDE_BRIGHTNESS,
@@ -84,7 +84,7 @@ COAST = dict(DESERT, **{
 })
 PRESETS = [
     ("Sky_Desert.hdr", "make_de_leon.py", DESERT),
-    ("Sky_Coast.hdr", "make_de_puerto.py", COAST),
+    ("Sky_Coast.hdr", "make_de_harbor.py", COAST),
 ]
 
 

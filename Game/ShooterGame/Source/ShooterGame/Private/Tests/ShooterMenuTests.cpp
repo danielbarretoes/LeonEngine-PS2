@@ -444,9 +444,9 @@ bool FShooterMenuTravelTest::RunTest(const FString& Parameters)
 	UShooterMainMenuWidget* MainMenu = MenuPlayer->GetMainMenu();
 	TestTrue("Shown", MainMenu->IsShown());
 	TestEqual("de_leon first", MainMenu->GetMatchSettings().MapName, FString(DeLeon));
-	// The map list (MapNames): de_puerto next, then round to de_leon again.
+	// The map list (MapNames): de_harbor next, then round to de_leon again.
 	MainMenu->StepMap(1);
-	TestEqual("de_puerto next", MainMenu->GetMatchSettings().MapName, FString(TEXT("/Game/Maps/de_puerto")));
+	TestEqual("de_harbor next", MainMenu->GetMatchSettings().MapName, FString(TEXT("/Game/Maps/de_harbor")));
 	MainMenu->StepMap(1);
 	TestEqual("Round to de_leon", MainMenu->GetMatchSettings().MapName, FString(DeLeon));
 	// Four bots (the default nine, down five), Expert (two up from Normal), the first to 5.

@@ -26,7 +26,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 // P20's tests: the bots' decisions (buying, engaging, planting, defusing) on a small open map, and a headless match on
-// each map (de_leon, de_puerto) with a fixed seed whose rounds keep the game's invariants.
+// each map (de_leon, de_harbor) with a fixed seed whose rounds keep the game's invariants.
 
 namespace
 {
@@ -501,13 +501,13 @@ bool FShooterGameBotsMatchOnDeLeonTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsMatchOnDePuertoTest, "ShooterGame.Bots.MatchOnDePuerto",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShooterGameBotsMatchOnDeHarborTest, "ShooterGame.Bots.MatchOnDeHarbor",
 	EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::SmokeFilter)
 
-bool FShooterGameBotsMatchOnDePuertoTest::RunTest(const FString& Parameters)
+bool FShooterGameBotsMatchOnDeHarborTest::RunTest(const FString& Parameters)
 {
 	// The second map, the same match: its waypoints, ladder and sites take the bots through three rounds.
-	PlayThreeRounds(*this, TEXT("/Game/Maps/de_puerto"));
+	PlayThreeRounds(*this, TEXT("/Game/Maps/de_harbor"));
 	return true;
 }
 

@@ -75,8 +75,8 @@ Proposed 2026-10-01, in priority order after the minimap; some expand items of t
 - One locomotion stance (rifle). The feet slide a little. No arms clip for defusing. The C4 has no first-person view
   model: with it out, fire plants the bomb (ps2-polish P6), but the arms show nothing.
 - The menus move with the D-pad and the arrows, not the left stick (UMG's navigation, ps2-polish P5 and P9); the main
-  menu lists de_leon and de_puerto (`+MapNames=`), with no preview image of the map.
-- de_puerto's rounds reach a plant less often than de_leon's: the bots' duels at A's chicane and B's vestibule decide
+  menu lists de_leon and de_harbor (`+MapNames=`), with no preview image of the map.
+- de_harbor's rounds reach a plant less often than de_leon's: the bots' duels at A's chicane and B's vestibule decide
   most rounds by elimination (the terrorists win 53 % over seeds 1 to 48, de_leon 56 %).
 - A match launched straight into a map without `?winrounds=` (the map on the command line) plays the
   config's `MaxRounds=30`, while the main menu's default is `?winrounds=5`.
@@ -94,7 +94,7 @@ Confirmed by playing (2026-09-30):
 
 Still to check:
 - Playing from the main menu in PCSX2 with the pad: the menus, the team choice, the pause (ps2-polish P9), the new HUD
-  and scoreboard (P6) and the sky (P8); de_puerto chosen in the menu and played by a person (its routes, the ladder,
+  and scoreboard (P6) and the sky (P8); de_harbor chosen in the menu and played by a person (its routes, the ladder,
   the quay's clip).
 - A DualShock 2: pressure buttons, a second pad, pulling a pad out mid-game.
 - The memory card in the PCSX2 BIOS browser: the save, its icon and its title.

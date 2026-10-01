@@ -3,12 +3,12 @@
 How ShooterGame's art is made: low-poly and textured in the style of Counter-Strike 1.6, built in Blender by scripts,
 exported to glTF, imported by LeonCook and cooked for the PS2 ([ps2-shipping](PLANS/ps2-shipping.md) N26; N27 made
 the characters, arms and weapons to this spec, N28 rebuilt de_leon, N30f added the physical materials and the
-sounds; de_puerto, the second map, was made after 0.25.0 to the same spec without anything of de_leon's). The decisions behind it: D5 (LeonCook bakes the lighting, not Blender), D6 (the Blender scripts are the source
+sounds; de_harbor, the second map, was made after 0.25.0 to the same spec without anything of de_leon's). The decisions behind it: D5 (LeonCook bakes the lighting, not Blender), D6 (the Blender scripts are the source
 of truth) and D11 (glTF is the only mesh, skeletal mesh and animation format).
 
 Code: `Game/ShooterGame/SourceArt/leon_art.py` (the shared Blender helpers), `check_art_determinism.py`,
 `Samples/make_art_samples.py`, `Characters/make_characters.py` (the skeleton and its clips), `make_cs16_characters.py`
-(the bodies) and `make_arms.py` (with `anim_body.py` and `anim_arms.py`), `Weapons/make_weapons.py`, `Maps/make_de_leon.py`, `Maps/make_de_puerto.py`, `Sounds/make_sounds.py`
+(the bodies) and `make_arms.py` (with `anim_body.py` and `anim_arms.py`), `Weapons/make_weapons.py`, `Maps/make_de_leon.py`, `Maps/make_de_harbor.py`, `Sounds/make_sounds.py`
 and `Sky/make_sky.py` (no Blender); the import in [ASSET_FORMATS.md](ASSET_FORMATS.md#skeletal-meshes-and-animations--gltf-import)
 and [LEVELS.md](LEVELS.md#importing-a-map-from-gltf); the commandlets in [TOOLS.md](TOOLS.md#importlistini).
 
@@ -197,7 +197,7 @@ depend on the exporter's defaults or on settings saved in a `.blend`:
   (the characters, the arms and the weapons export extras for it since N30f).
 
 glTF has no timestamps or UUIDs, and the same script in the same Blender writes the same bytes: the committed `.glb`
-files (the characters, the arms, the weapons, de_leon, de_puerto and the samples) come out identical, twice in a row
+files (the characters, the arms, the weapons, de_leon, de_harbor and the samples) come out identical, twice in a row
 (`check_art_determinism.py`). The exporter writes its version in `asset.generator` (`Khronos glTF Blender I/O
 v5.2.39`), so the Blender version is pinned (5.2): another version is a new export of everything, checked by eye and
 committed together. The `.blend` files are not deterministic (a save writes different bytes every time) and are never
@@ -218,11 +218,11 @@ listed before the meshes; the surface types are named in the project's `DefaultE
 
 | Surface | Materials |
 | --- | --- |
-| Concrete | de_leon's `Sandstone`, `Trim`, `Signs`; de_puerto's `Asphalt`, `Concrete`, `Panel` |
-| Dirt | de_leon's `Sand`; de_puerto's `Water` |
+| Concrete | de_leon's `Sandstone`, `Trim`, `Signs`; de_harbor's `Asphalt`, `Concrete`, `Panel` |
+| Dirt | de_leon's `Sand`; de_harbor's `Water` |
 | Tile | de_leon's `Paving` |
-| Wood | de_leon's `Wood`, `Crate`; de_puerto's `Pallet` |
-| Metal | de_leon's `Lamp`; de_puerto's `Corrugated`, `Girder`, `Crane`, `Container*`, `Shutter`, `Signs`, `Lamp`, `Bollard`, `Hull`, `ShipWhite`; every weapon but the C4 |
+| Wood | de_leon's `Wood`, `Crate`; de_harbor's `Pallet` |
+| Metal | de_leon's `Lamp`; de_harbor's `Corrugated`, `Girder`, `Crane`, `Container*`, `Shutter`, `Signs`, `Lamp`, `Bollard`, `Hull`, `ShipWhite`; every weapon but the C4 |
 | Computer | the C4 |
 | Flesh | the bodies and the arms |
 | Glass | none yet |
@@ -338,10 +338,10 @@ LICENSES.md):
   doors'), exported in the RAW mode and baked by LeonCook (D5); the sky is the world settings'. No fog and no LODs
   (N29: the map fits in the far plane and its largest piece has 146 triangles).
 
-## The map: de_puerto
+## The map: de_harbor
 
-The second map, an industrial port (`Maps/make_de_puerto.py`; the plan, the cells, the nodes and the textures in
-[LEVELS.md](LEVELS.md#worked-example-de_puerto)), is made to the same spec as de_leon and shares none of its art: its
+The second map, an industrial port (`Maps/make_de_harbor.py`; the plan, the cells, the nodes and the textures in
+[LEVELS.md](LEVELS.md#worked-example-de_harbor)), is made to the same spec as de_leon and shares none of its art: its
 own textures painted by its script (asphalt, cast concrete, precast wall panels, corrugated sheet with rust, painted
 steel, the crane's yellow, red, blue and green containers, pine pallet crates, water, roller shutters, the site plates;
 14 materials, P4 but the corrugated sheet's P8), its own physical materials' choice (the asphalt, the concrete and the
@@ -374,7 +374,7 @@ ADPCM at that rate: [ASSET_FORMATS.md](ASSET_FORMATS.md)), and `DefaultGame.ini`
 
 `Sky/make_sky.py` ([ps2-polish](PLANS/ps2-polish.md) P8; Python's standard library, no Blender, about 6 s a sky)
 generates the maps' skies, one preset each (`PRESETS`: the desert for de_leon, `Sky/Sky_Desert.hdr`; the coast for
-de_puerto, `Sky/Sky_Coast.hdr`, a greyer zenith, a cool haze that climbs higher, a warm glow toward its lower sun, the
+de_harbor, `Sky/Sky_Coast.hdr`, a greyer zenith, a cool haze that climbs higher, a warm glow toward its lower sun, the
 sea below the horizon and more clouds from another seed). de_leon's desert sky is a high dynamic range long-lat panorama, `Sky/Sky_Desert.hdr` (1 024 x 512, Radiance RGBE with
 run-length encoded scanlines and no date in the header): a deep blue zenith fading to a pale, warm haze at the horizon
 (brighter toward the sun), distant sand below it, the sun (a disc 1.5 degrees in radius, 60 times the horizon's
@@ -388,7 +388,7 @@ radiance tone-mapped by the ACES filmic curve (Narkowicz's fit) at `ExposureBias
 ([ASSET_FORMATS.md](ASSET_FORMATS.md#cube-maps)); the PS2 cook palettes each face to PSMT8 (23 KB with its mips and CLUT; the ground below the horizon,
 6 colours, PSMT4 of 12 KB: 127 KB of the 1 856 KB texture arena). Faces of 256 x 256 look sharper but made de_leon's load
 take 1 038 KB of the PS2's 1 024 KB `LoadMapMisc` budget. de_leon's `WorldSettings` node names it
-([LEVELS.md](LEVELS.md#the-world-settings)); `/Game/Sky/T_Sky_Coast` is the coast's the same way, named by de_puerto's
+([LEVELS.md](LEVELS.md#the-world-settings)); `/Game/Sky/T_Sky_Coast` is the coast's the same way, named by de_harbor's
 (each map loads only its own sky).
 
 ## The samples (N26's gate)
@@ -402,7 +402,7 @@ take 1 038 KB of the PS2's 1 024 KB `LoadMapMisc` budget. de_leon's `WorldSettin
   (with its frame since N27) and one clip, `Idle` (2 s, looping).
 
 They are not game content: no ImportList imports them. `check_art_determinism.py` passes on them (and on every
-`make_*.py` that uses `leon_art`: the characters, the arms, the weapons, de_leon and de_puerto). N27 exported them again: the
+`make_*.py` that uses `leon_art`: the characters, the arms, the weapons, de_leon and de_harbor). N27 exported them again: the
 crate's notify in the list shape, the mannequin's socket with its frame. LeonCook imports them into a
 scratch project in the ignored `Engine/Saved` (the `.lproj` need not exist):
 

@@ -7,7 +7,7 @@
 # 1. BuildCookRun -platform=PS2 -build -cook -stage -pak stages the game with its measuring command line (-NoBuild keeps
 #    the stage and only rewrites LeonCommandLine.txt): a bot match of -Rounds rounds with -Seed, the local player
 #    watching through a bot's eyes (-BotMatchSpectate), -LogFrameTimes, and -ExitAfterSeconds as a bound; -Map plays
-#    that map (a long package name, /Game/Maps/de_puerto: -map=) instead of the game's BotMatchMapName.
+#    that map (a long package name, /Game/Maps/de_harbor: -map=) instead of the game's BotMatchMapName.
 # 2. PCSX2 runs it without its window (-nogui) from a private data folder (<Project>\Saved\PCSX2) whose PCSX2.ini is the
 #    user's with Engine\Platforms\PS2\Build\PCSX2\Measure.ini on top: the console's EE and VU timings, host: on.
 # 3. The EE log is read until the game's `ProfileSummary:` line (UGameEngine at exit, after `FrameStats Summary:`), then

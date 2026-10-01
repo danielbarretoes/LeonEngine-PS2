@@ -4,7 +4,7 @@ A map is a `.lmap` package that holds a world: its `UWorld` (the map's asset, na
 persistent level, the level's `AWorldSettings` and the actors with their components (plan decision D13,
 `PKG_ContainsMap`), as UE's `.umap`. `UEngine::LoadMap` opens one; a map is made by importing a glTF scene exported from
 Blender (LeonEd's `UGLTFMapFactory`, [below](#importing-a-map-from-gltf)) or by code that builds a world and saves it.
-The PS2 runtime loads maps the same way: ShooterGame opens `de_leon` or `de_puerto` from its pak on the EE, cooked by
+The PS2 runtime loads maps the same way: ShooterGame opens `de_leon` or `de_harbor` from its pak on the EE, cooked by
 the PS2 target platform ([ps2-engine](PLANS/ps2-engine.md)).
 
 Code: `Engine/Source/Runtime/Engine/Classes/Engine/World.h`, `Level.h`, the actor and component classes in
@@ -393,11 +393,11 @@ two ladders and the sun), import `de_leon.glb` and the AxisTest source under the
 refused: no sites, buy zones or team starts) and spawn ten pawns on the map; `ShooterGame.Bots.MatchOnDeLeon` plays
 three rounds on it.
 
-## Worked example: de_puerto
+## Worked example: de_harbor
 
 ShooterGame's second map, a 64 × 56 m industrial port at the end of the afternoon, made by the same pipeline with
-nothing of de_leon's but the conventions: its own script (`Maps/make_de_puerto.py`, Blender through `leon_art`), its own
-painted textures and materials (`/Game/Maps/de_puerto/Materials`), its own sky (`/Game/Sky/T_Sky_Coast`, `make_sky.py`'s
+nothing of de_leon's but the conventions: its own script (`Maps/make_de_harbor.py`, Blender through `leon_art`), its own
+painted textures and materials (`/Game/Maps/de_harbor/Materials`), its own sky (`/Game/Sky/T_Sky_Coast`, `make_sky.py`'s
 coast preset) and its own section of `ImportList.ini`. An original layout in the readable style of CS 1.6's maps: the
 terrorists' truck yard to the south, the counter-terrorists' yard to the north, bomb site A on the quay apron under a
 gantry crane to the east, bomb site B inside a roofed warehouse to the west, and three routes:
@@ -415,11 +415,11 @@ are scenery.
 
 ```bat
 "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" --background --factory-startup ^
-    --python Game\ShooterGame\SourceArt\Maps\make_de_puerto.py
+    --python Game\ShooterGame\SourceArt\Maps\make_de_harbor.py
 python Game\ShooterGame\SourceArt\Sky\make_sky.py
 Engine\Binaries\Win64\LeonCook.exe Game\ShooterGame\ShooterGame.lproj -run=ImportAssets ^
     -importlist=Game/ShooterGame/SourceArt/ImportList.ini
-Game\ShooterGame\Binaries\Win64\ShooterGame.exe /Game/Maps/de_puerto?team=CT
+Game\ShooterGame\Binaries\Win64\ShooterGame.exe /Game/Maps/de_harbor?team=CT
 ```
 
 ```text
@@ -501,12 +501,12 @@ sheet, P8):
 
 The script fails when a cell has more than 1 500 triangles, when two things at walking height overlap, when a waypoint
 link, a start or a site's middle runs into something, or when the hand graph is not one piece. The layout was tuned
-on the bot match (`BotMatch.bat 10 <seed> /Game/Maps/de_puerto`): with mid open to the CT spawn and both sites the
+on the bot match (`BotMatch.bat 10 <seed> /Game/Maps/de_harbor`): with mid open to the CT spawn and both sites the
 terrorists won three rounds in four; the gate, the fence, the chicane, the vestibule and lookouts deep in the sites
 bring it to 53 % over seeds 1 to 48 (de_leon: 56 % over 1 to 24). ShooterGame's tests check the map as de_leon's
-(`ShooterGame.Map.DePuertoHoldsTheGame`, `TenPawnsOnDePuerto`, `RequiredTags`, `NavigationCoverage`,
-`ShooterGame.Bots.MatchOnDePuerto`, the meshes' quantization); `RunGates.bat` plays its bot match twice
-(`BotMatchDePuerto`).
+(`ShooterGame.Map.DeHarborHoldsTheGame`, `TenPawnsOnDeHarbor`, `RequiredTags`, `NavigationCoverage`,
+`ShooterGame.Bots.MatchOnDeHarbor`, the meshes' quantization); `RunGates.bat` plays its bot match twice
+(`BotMatchDeHarbor`).
 
 ## Engine maps
 

@@ -2,7 +2,7 @@
 	"FileVersion": 3,
 	"EngineAssociation": "",
 	"Category": "",
-	"Description": "ShooterGame: an offline Counter-Strike-style shooter on de_leon and de_puerto (first-person movement, two teams, bots).",
+	"Description": "ShooterGame: an offline Counter-Strike-style shooter on de_leon and de_harbor (first-person movement, two teams, bots).",
 	"Modules": [
 		{
 			"Name": "ShooterGame",

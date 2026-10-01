@@ -68,8 +68,8 @@ bool FShooterContentMeshQuantizationTest::RunTest(const FString& Parameters)
 			Worst <= FMath::Min(MaxError, HalfStep + 0.001f));
 	}
 
-	// The maps' placed meshes (de_leon's, de_puerto's): in the world too, at most 0.5 cm.
-	for (const TCHAR* MapName : {TEXT("/Game/Maps/de_leon"), TEXT("/Game/Maps/de_puerto")})
+	// The maps' placed meshes (de_leon's, de_harbor's): in the world too, at most 0.5 cm.
+	for (const TCHAR* MapName : {TEXT("/Game/Maps/de_leon"), TEXT("/Game/Maps/de_harbor")})
 	{
 		UPackage* Map = LoadPackage(nullptr, MapName, LOAD_None);
 		if (!TestNotNull(MapName, Map))

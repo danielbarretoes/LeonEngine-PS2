@@ -1,7 +1,7 @@
 @echo off
 REM Engine\Build\BatchFiles\BotMatch.bat [Rounds] [Seed] [Map]
 REM The headless bot match (plan P21): builds ShooterGame (Win64 Development), plays de_leon (or Map, a long package
-REM name such as /Game/Maps/de_puerto, passed as -map=) with ten bots and the local player spectating (-botmatch), at
+REM name such as /Game/Maps/de_harbor, passed as -map=) with ten bots and the local player spectating (-botmatch), at
 REM the fixed 30 Hz steps as fast as it can (-nullrhi -benchmark), for Rounds rounds (10) with the round stream's Seed
 REM (7). Every frame the game checks the match's invariants
 REM (FShooterMatchChecker: the round ends and the scores, the money, the team sizes, the pawns' health and floor);

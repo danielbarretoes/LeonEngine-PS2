@@ -7,7 +7,7 @@ Runs each script twice in Blender, headless (`--background --factory-startup`, `
 every .glb of the two runs byte for byte, then with the .glb of that name next to the script (the committed one).
 Without arguments it checks every make_*.py under this folder that uses leon_art, and fails when one of the scripts
 the art needs is missing from that list (EXPECTED_SCRIPTS: the skeleton and its clips, the CS 1.6 bodies, the arms,
-the weapons, de_leon, de_puerto and the samples). The generators that need no Blender (PYTHON_SCRIPTS: the skies'
+the weapons, de_leon, de_harbor and the samples). The generators that need no Blender (PYTHON_SCRIPTS: the skies'
 HDRs, ps2-polish P8) run twice with this Python (`<script> --out <temp folder>`) and their .hdr files are compared the same way. The .blend files are not
 compared:
 Blender writes different bytes on every save. Blender is LEON_BLENDER, else Blender 5.2's default install; the glTF
@@ -30,7 +30,7 @@ EXPECTED_SCRIPTS = [
     os.path.join("Characters", "make_characters.py"),
     os.path.join("Characters", "make_cs16_characters.py"),
     os.path.join("Maps", "make_de_leon.py"),
-    os.path.join("Maps", "make_de_puerto.py"),
+    os.path.join("Maps", "make_de_harbor.py"),
     os.path.join("Samples", "make_art_samples.py"),
     os.path.join("Weapons", "make_weapons.py"),
 ]

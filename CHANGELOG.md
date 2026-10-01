@@ -9,13 +9,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **de_puerto**, ShooterGame's second bomb defusal map: a 64 × 56 m industrial port at the end of the afternoon (the
+- **de_harbor**, ShooterGame's second bomb defusal map: a 64 × 56 m industrial port at the end of the afternoon (the
   T truck yard to the south, the CT yard to the north, bomb site A on the quay apron under a gantry crane, bomb site B
   in a roofed warehouse; three routes: A long along the quay to a chicane of container stacks, mid through a gate into
   the CT spawn's courtyard, the alley to the warehouse's front door with a roofed connector from mid). An original
   layout made by the same pipeline as de_leon with none of its art, to prove the pipeline does not depend on it
-  ([Docs/LEVELS.md](Docs/LEVELS.md#worked-example-de_puerto)).
-  - `Game/ShooterGame/SourceArt/Maps/make_de_puerto.py` (Blender through `leon_art`, deterministic, in
+  ([Docs/LEVELS.md](Docs/LEVELS.md#worked-example-de_harbor)).
+  - `Game/ShooterGame/SourceArt/Maps/make_de_harbor.py` (Blender through `leon_art`, deterministic, in
     `check_art_determinism.py`'s list): 4 216 triangles in 112 pieces, 9 cells and 22 portals, 14 materials with
     their own painted textures (asphalt, concrete, wall panels, corrugated sheet, steel, the crane's paint, three
     containers' colours, pallet crates, water, shutters, the site plates) and physical materials, shared meshes for
@@ -24,18 +24,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
     height overlap.
   - `Sky/make_sky.py` writes a second sky from presets, the coast (`Sky_Coast.hdr`, `/Game/Sky/T_Sky_Coast`): a greyer
     zenith, a cool haze, a warm glow toward the low sun, the sea below the horizon. The desert's bytes are unchanged.
-  - The main menu offers both maps (`+MapNames=/Game/Maps/de_puerto`); the cook and the PS2 pak and ISO take it with
-    every map under `/Game/Maps` (the ISO: 8 464 384 bytes). PCSX2 (`MeasurePS2 -Map /Game/Maps/de_puerto`): 29.92 fps,
+  - The main menu offers both maps (`+MapNames=/Game/Maps/de_harbor`); the cook and the PS2 pak and ISO take it with
+    every map under `/Game/Maps` (the ISO: 8 464 384 bytes). PCSX2 (`MeasurePS2 -Map /Game/Maps/de_harbor`): 29.92 fps,
     p50 / p95 / p99 33.5 / 33.5 / 34.0 ms, the scene 6.9 ms, GMalloc's peak 5 176 KB, `LoadMapMisc` 710 of 1 024 KB;
     the same from the disc.
   - The bots play it: over seeds 1 to 48 of the bot match the terrorists win 53 % of the rounds (de_leon 56 % over 1
-    to 24); `BotMatch.bat 10 7 /Game/Maps/de_puerto`: `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides
+    to 24); `BotMatch.bat 10 7 /Game/Maps/de_harbor`: `Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7, sides
     switched after round 5, reasons [3,3,4,4,4,3,3,3]`.
 - `BotMatch.bat [Rounds] [Seed] [Map]` and `MeasurePS2 -Map <map>`: a bot match on another map (`-map=`, which the
-  game already read); `RunGates.bat` plays de_puerto's bot match too (`BotMatchDePuerto`).
-- Tests: `ShooterGame.Map.DePuertoHoldsTheGame`, `TenPawnsOnDePuerto`, `NavigationCoverage` (both maps' waypoint
-  graphs are one piece and reach the sites and the starts), `ShooterGame.Bots.MatchOnDePuerto`; `RequiredTags` imports
-  de_puerto's source, `MeshQuantization` checks its placed meshes, the menu test steps the map list (129 ShooterGame
+  game already read); `RunGates.bat` plays de_harbor's bot match too (`BotMatchDeHarbor`).
+- Tests: `ShooterGame.Map.DeHarborHoldsTheGame`, `TenPawnsOnDeHarbor`, `NavigationCoverage` (both maps' waypoint
+  graphs are one piece and reach the sites and the starts), `ShooterGame.Bots.MatchOnDeHarbor`; `RequiredTags` imports
+  de_harbor's source, `MeshQuantization` checks its placed meshes, the menu test steps the map list (129 ShooterGame
   tests).
 
 ### Changed
@@ -54,6 +54,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/).
   The bot matches are unchanged (`Botmatch OK: 8 round(s), CT 2 - T 6, 57 kill(s), seed 7` on both maps); PCSX2
   (`MeasurePS2`, de_leon): 29.62 fps, p50 / p95 / p99 33.5 / 33.5 / 33.5 ms, the scene 6.8 ms; each body's texture
   23 KB of VRAM, as before.
+- Everything in English, code and assets: the second map, first named `de_puerto`, is `de_harbor` (its package
+  `/Game/Maps/de_harbor` and folder, `make_de_harbor.py`, `de_harbor.glb` / `.blend`, the `+MapNames=` entry, the
+  `BotMatchDeHarbor` gate and the tests `ShooterGame.Map.DeHarborHoldsTheGame`, `TenPawnsOnDeHarbor` and
+  `ShooterGame.Bots.MatchOnDeHarbor`); reimported from the same source, so the match replays as before
+  (`BotMatch.bat 10 7 /Game/Maps/de_harbor`: the same `Botmatch OK` line). `Docs/PS2OFFICIAL/RESUMEN1.md` is
+  translated as `PIPELINE_SUMMARY.md`, and a font test measures "Hello". The plans under `Docs/PLANS/` stay in
+  Spanish; `de_leon` keeps the engine's name.
 
 ## [0.25.0] - 2026-10-01
 
